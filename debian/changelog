@@ -1,5 +1,5 @@
-pilight-cc (0.1-1) unstable; urgency=low
+pilight-cc (0.1-0~ppa1) trusty; urgency=low
 
-  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+  * Initial release.
 
- -- Johan Wermensjö <johanwermensjoe@>  Fri, 05 Feb 2016 21:49:50 +0100
+ -- Johan Wermensjö <johanwermensjoe@gmail.com>  Fri, 5 Oct 2015 22:00:17 +0100

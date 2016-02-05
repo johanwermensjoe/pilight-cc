@@ -1,15 +1,16 @@
 Source: pilight-cc
-Section: unknown
+Section: python
 Priority: optional
-Maintainer: Johan Wermensjö <johanwermensjoe@>
-Build-Depends: debhelper (>= 8.0.0)
-Standards-Version: 3.9.4
-Homepage: <insert the upstream URL, if relevant>
-#Vcs-Git: git://git.debian.org/collab-maint/pilight-cc.git
-#Vcs-Browser: http://git.debian.org/?p=collab-maint/pilight-cc.git;a=summary
+Maintainer: Johan Wermensjö, <johanwermensjoe@gmail.com>
+Build-Depends: debhelper (>= 9),
+               python (>= 3.0)
+Standards-Version: 3.9.5
+X-Python-Version: >= 3.0
 
-Package: pilight-cc
+Package: media-cleaner
 Architecture: all
-Depends: ${misc:Depends}
-Description: <insert up to 60 chars description>
- <insert long description, indented with spaces>
+Depends: ${misc:Depends}, ${python:Depends},
+         python (>= 3.0)
+Description: graphical client for managing pilight units. Contains
+configuration tools and functionality including audio effects,
+scheduleing and more.
