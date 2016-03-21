@@ -1,5 +1,7 @@
 from gi.repository import Gtk
+
 import message_pb2
+
 
 def hello(button):
     print("Hello World!\n")
@@ -10,7 +12,7 @@ def hello(button):
     print(": " + msg.SerializeToString())
 
 builder = Gtk.Builder()
-builder.add_from_file("pilightcc.glade")
+builder.add_from_file("res/pilightcc.glade")
 handlers = {
     "onDeleteWindow": Gtk.main_quit,
     "onButtonPressed": hello
