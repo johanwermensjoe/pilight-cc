@@ -4,7 +4,7 @@ import capture.capture as capture
 from timeit import timeit
 
 
-class MyTestCase(unittest.TestCase):
+class CaptureTestCase(unittest.TestCase):
     def test_capture_format(self):
         pb = capture.get_pixel_buffer()
         print "\nCapture format:"
@@ -29,7 +29,8 @@ class MyTestCase(unittest.TestCase):
                                        pb.get_height() / 2)
 
         fps = 100 / timeit(test, number=100)
-        print "\nAvg fps: " + str(fps)
+        print "\nCapture rate:"
+        print "Avg fps: " + str(fps)
         self.assertGreaterEqual(fps, 30)
 
 
