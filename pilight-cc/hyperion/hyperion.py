@@ -33,6 +33,7 @@ from message_pb2 import ColorRequest
 from message_pb2 import ImageRequest
 from message_pb2 import ClearRequest
 
+
 class Hyperion(object):
     """ Hyperion connection class.
 
@@ -61,7 +62,7 @@ class Hyperion(object):
         # Close the socket.
         self.__socket.close()
 
-    def sendColor(self, color, priority, duration = -1):
+    def sendColor(self, color, priority, duration=-1):
         """ Send a static color to Hyperion.
         - color    : integer value with the color as 0x00RRGGBB
         - priority : the priority channel to use
@@ -78,7 +79,7 @@ class Hyperion(object):
         # Send the message.
         self.__sendMessage(request)
 
-    def sendImage(self, width, height, data, priority, duration = -1):
+    def sendImage(self, width, height, data, priority, duration=-1):
         """ Send an image to Hyperion.
         - width    : width of the image
         - height   : height of the image
