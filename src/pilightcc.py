@@ -1,18 +1,17 @@
 from gi.repository import Gtk
 
-import message_pb2
+from hyperion.hyperion import Hyperion
 
+_HYP_SERVER_IP_ADDRESS = "10.0.0.68"
+_HYP_SERVER_PORT = 19445
 
 def hello(button):
-    print("Hello World!\n")
-    msg = message_pb2.ColorRequest()
-    msg.priority = 50
-    msg.RgbColor = 0x00FF0000
-    msg.duration = 1000
-    print(": " + msg.SerializeToString())
+    hyp = Hyperion(_HYP_SERVER_IP_ADDRESS, _HYP_SERVER_PORT)
+    print("Sending")
+    hyp.sendColor(0x00FF0000, 50, 1000)
 
 builder = Gtk.Builder()
-builder.add_from_file("res/pilightcc.glade")
+builder.add_from_file("../res/pilightcc.glade")
 handlers = {
     "onDeleteWindow": Gtk.main_quit,
     "onButtonPressed": hello
