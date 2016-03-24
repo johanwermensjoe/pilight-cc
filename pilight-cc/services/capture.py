@@ -6,7 +6,7 @@ gi.require_version('Gdk', '3.0')
 from gi.repository import Gdk, GdkPixbuf
 
 from multiprocessing import Lock
-
+from threading import Timer
 
 class CaptureService:
     def __init__(self, framerate, scale_width, scale_height):
@@ -16,18 +16,18 @@ class CaptureService:
         self.__data = None
         self.__lock = Lock()
 
+    def __del__(self):
+
+
     def get_pixel_buffer(self):
         try:
             self.__lock.acquire()
             return self.__data
-            self.__lock.release()
         finally:
-            pass
+            self.__lock.release()
 
-    def execute(self):
-        while True:
-            # TODO use timer
-            self.__update_pixel_buffer()
+    def start(self):
+        Timer(1 / self.__framerate, self.__update_pixel_buffer).start()
 
     def __update_pixel_buffer(self):
         pixel_buffer = scale_pixel_buffer(get_pixel_buffer(),
