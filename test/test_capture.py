@@ -1,12 +1,12 @@
 import unittest
-
-import services.capture as capture
 from timeit import timeit
+
+from services.capture.capture import CaptureService
 
 
 class CaptureTestCase(unittest.TestCase):
     def test_capture_format(self):
-        pb = capture.get_pixel_buffer()
+        pb = CaptureService.get_pixel_buffer()
         print "\nCapture format:"
         print "Size: {0}x{1}".format(pb.get_width(), pb.get_height())
         print "Channels: {0}".format(str(pb.get_n_channels()))
@@ -19,16 +19,16 @@ class CaptureTestCase(unittest.TestCase):
 
     def test_capture_scaling(self):
         scale = 2
-        pb = capture.get_pixel_buffer()
-        pb2 = capture.scale_pixel_buffer(pb, pb.get_width() / scale,
+        pb = CaptureService.get_pixel_buffer()
+        pb2 = CaptureService.scale_pixel_buffer(pb, pb.get_width() / scale,
                                          pb.get_height() / scale)
         self.assertEqual(pb.get_byte_length(),
                          pb2.get_byte_length() * scale**2)
 
     def test_capture_rate(self):
         def capture_and_scale():
-            pb = capture.get_pixel_buffer()
-            capture.scale_pixel_buffer(pb, pb.get_width() / 2,
+            pb = CaptureService.get_pixel_buffer()
+            CaptureService.scale_pixel_buffer(pb, pb.get_width() / 2,
                                        pb.get_height() / 2)
 
         fps = 100 / timeit(capture_and_scale, number=100)

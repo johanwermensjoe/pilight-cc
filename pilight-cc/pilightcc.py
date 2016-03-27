@@ -1,9 +1,7 @@
 import gi
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GdkPixbuf
-from timeit import timeit
-from hyperion.hyperion import Hyperion
+from services.hyperion.hyperion import HyperionService
 
 _HYP_SERVER_IP_ADDRESS = "10.0.0.68"
 _HYP_SERVER_PORT = 19445
@@ -18,10 +16,10 @@ _HYP_CAPTURE_IMAGE_WIDTH = 64
 
 
 
-hyp = Hyperion(_HYP_SERVER_IP_ADDRESS, _HYP_SERVER_PORT)
+hyp = HyperionService(_HYP_SERVER_IP_ADDRESS, _HYP_SERVER_PORT)
 # hyp.sendImage(pb.get_width(), pb.get_height(), pb.get_pixels(), 50)
 # hyp.sendImage(pb.get_width(), pb.get_height(), pb.get_pixels(), 50, 500)
-hyp.clearall()
+hyp.clear_all()
 
 # def hello(button):
 #     hyp = Hyperion(_HYP_SERVER_IP_ADDRESS, _HYP_SERVER_PORT)
