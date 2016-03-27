@@ -10,6 +10,9 @@ from multiprocessing import Queue
 
 from services.manager import State
 
+from settings.settings import Setting
+from settings.settings import Flag
+
 # Protocol buffer message
 from message_pb2 import HyperionRequest
 from message_pb2 import HyperionReply
@@ -29,26 +32,35 @@ class HyperionService(Process):
         DISCONNECTED = 2
         ERROR = 3
 
-    def __init__(self, settings_listener):
+    def __init__(self, settings_connector):
         """ Constructor
-        - settings_listener : listener for settings updates
-        - state             : state object for the service
+        - settings_connector    : connector for settings updates
+        - state                 : state object for the service
         """
         self.state = State()
+        self.state.set_value(HyperionService.StateValue.DISCONNECTED)
         self.__queue = Queue()
-        self.__settings_listener = settings_listener
+        self.__settings_connector = settings_connector
 
-    def __connect(self, server, port):
+    def __connect(self):
         """ Attempt connection to hyperion server.
-        - server : server address of Hyperion
-        - port   : port number of Hyperion
         """
         # Create a new socket.
         self.__socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__socket.settimeout(2)
 
         # Connect socket to the provided server.
-        self.__socket.connect((server, port))
+        self.__socket.connect((self.__ip_address, self.__port))
+
+    def __load_settings(self):
+        # Clear alert before to avoid missing updates.
+        self.__settings_connector.signal.clear()
+
+        # Load the updated settings.
+        self.__ip_address = self.__settings_connector.get_setting(
+            Setting.HYPERION_IP_ADDRESS)
+        self.__port = self.__settings_connector.get_setting(
+            Setting.HYPERION_PORT)
 
     def __send_message(self, message):
         """ Send the given proto message to Hyperion.
@@ -73,10 +85,26 @@ class HyperionService(Process):
 
     def run(self):
         try:
-            self.__connect("10.0.0.68", 19445)
             while True:
-                # Fetch and send messages.
-                self.__send_message(self.__queue.get())
+                # Check if the hyperion service is enabled or block until it is.
+                self.__settings_connector.get_flag(Flag.HYPERION_ENABLE).wait()
+
+                # Reload settings if needed.
+                if self.__settings_connector.signal.is_set():
+                    self.__load_settings()
+
+                try:
+                    # Try to connect to server if not connected.
+                    if self.state.get_value() != \
+                            HyperionService.StateValue.CONNECTED:
+                        self.__connect()
+
+                    # Fetch and send messages.
+                    self.__send_message(self.__queue.get())
+                except socket.timeout:
+                    self.state.set_value(HyperionService.StateValue.ERROR)
+                except socket.error:
+                    self.state.set_value(HyperionService.StateValue.ERROR)
         finally:
             # Close the socket.
             self.__socket.close()

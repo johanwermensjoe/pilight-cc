@@ -3,14 +3,37 @@
 import os
 
 from multiprocessing import Manager
+from multiprocessing import Event
 
 from ConfigParser import RawConfigParser
 
 
-class Setting(object):
-    REV = 'rev'
+class SettingsConnector(object):
+    def __init__(self, settings_manager):
+        self.__settings_manager = settings_manager
+        self.signal = Event()
 
-    CAPTURE_ENABLE = 'uCaptureEnable'
+    def get_flag(self, key):
+        """ Get a flag
+        - key   : the key of the setting
+        """
+        return self.__settings_manager.get_flag(key)
+
+    def get_setting(self, key):
+        """ Get a setting value.
+        - key   : the key of the setting
+        """
+        return self.__settings_manager.get_setting(key)
+
+    def set_setting(self, key, value):
+        """ Set a setting value.
+        - key   : the key of the setting
+        - value : the value of the setting
+        """
+        self.__settings_manager.set_setting(key, value)
+
+
+class Setting(object):
     CAPTURE_SCALE_WIDTH = 'cWidth'
     CAPTURE_SCALE_HEIGHT = 'cHeight'
     CAPTURE_PRIORITY = 'cPriority'
@@ -19,10 +42,15 @@ class Setting(object):
     HYPERION_IP_ADDRESS = 'hIpAddress'
     HYPERION_PORT = 'hPort'
 
-    AUDIO_EFFECT_ENABLE = 'uAudioEffectEnable'
     AUDIO_EFFECT_SPOTIFY_ENABLE = 'aeSpotifyAutoEnable'
     AUDIO_EFFECT_PRIORITY = 'aePriority'
     AUDIO_EFFECT_FRAME_RATE = 'aeFrameRate'
+
+
+class Flag(object):
+    CAPTURE_ENABLE = 'uCaptureEnable'
+    AUDIO_EFFECT_ENABLE = 'uAudioEffectEnable'
+    HYPERION_ENABLE = 'uHyperionEnable'
 
 
 class SettingsManager:
@@ -42,13 +70,8 @@ class SettingsManager:
 
     _CONFIG_PATH = "pilight-cc.config"
 
+    # Settings with default value, section and visibility.
     _CONF = {
-        # Hidden temporary settings.
-        Setting.REV: _BaseSetting(0, None, True),
-
-        Setting.CAPTURE_ENABLE: _BaseSetting(False, None, True),
-        Setting.AUDIO_EFFECT_ENABLE: _BaseSetting(False, None, True),
-
         # Persistent settings.
         Setting.CAPTURE_SCALE_WIDTH: _BaseSetting(64, _Section.CAPTURE, False),
         Setting.CAPTURE_SCALE_WIDTH: _BaseSetting(64, _Section.CAPTURE, False),
@@ -66,27 +89,42 @@ class SettingsManager:
         Setting.AUDIO_EFFECT_FRAME_RATE: _BaseSetting(60, _Section.AUDIO, False)
     }
 
+    # Flags with initial value.
+    _FLAGS = {
+        Flag.CAPTURE_ENABLE: False,
+        Flag.AUDIO_EFFECT_ENABLE: False,
+        Flag.HYPERION_ENABLE: True
+    }
+
     def __init__(self):
         """ Constructor
         """
         self.__manager = Manager()
         self.__settings = self.__manager.dict()
-        self.read_settings()
+        self.__flags = self.__manager.dict()
+        self.__init_flags()
+        self.__read_settings()
+        self.__connectors = []
 
-    def get_setting(self, key):
-        """ Get a setting value.
-        - key   : the key of the setting
+    def __del__(self):
+        self.__save_settings()
+
+    def __notify_connectors(self):
+        """ Notifies the connectors that some setting has changed.
         """
-        return self.__settings[key]
+        for c in self.__connectors:
+            c.signal.set()
 
-    def set_setting(self, key, value):
-        """ Set a setting value.
-        - key   : the key of the setting
-        - value : the value of the setting
+    def __init_flags(self):
+        """ Initialize the setting flags.
         """
-        self.__settings[key] = value
+        for key, is_set in self._FLAGS.iteritems():
+            event = Event()
+            if is_set:
+                event.set()
+            self.__flags[key] = event
 
-    def __save_config(self):
+    def __save_settings(self):
         """
         Save the current config file to storage.
         """
@@ -109,7 +147,7 @@ class SettingsManager:
         except IOError:
             raise Exception()
 
-    def __read_config(self):
+    def __read_settings(self):
         """
         Read config file, using default values for missing settings.
         """
@@ -127,3 +165,28 @@ class SettingsManager:
                 val = setting.default
 
             self.__settings[key] = val
+
+    def create_connector(self):
+        connector = SettingsConnector(self)
+        self.__connectors += connector
+        return connector
+
+    def get_flag(self, key):
+        """ Get a flag
+        - key   : the key of the setting
+        """
+        return self.__flags[key]
+
+    def get_setting(self, key):
+        """ Get a setting value.
+        - key   : the key of the setting
+        """
+        return self.__settings[key]
+
+    def set_setting(self, key, value):
+        """ Set a setting value.
+        - key   : the key of the setting
+        - value : the value of the setting
+        """
+        self.__settings[key] = value
+        self.__notify_connectors()
