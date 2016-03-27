@@ -22,8 +22,8 @@ class HyperionService(Process):
     """ Hyperion Service class.
     """
 
-    class State(object):
-        """ State class.
+    class StateValue(object):
+        """ State Value class.
         """
         CONNECTED = 1
         DISCONNECTED = 2

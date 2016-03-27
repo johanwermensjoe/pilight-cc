@@ -17,8 +17,8 @@ class CaptureService(Process):
     """ Capture Service class.
     """
 
-    class State(object):
-        """ State class.
+    class StateValue(object):
+        """ State Value class.
         """
         OK = 1
         ERROR = 2
