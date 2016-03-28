@@ -1,16 +1,12 @@
 """ Audio Effect service module. """
 
-# Multiprocessing
-from multiprocessing import Process
-from threading import Timer
-
-from services.manager import State
+from services.baseservice import BaseService
 
 from settings.settings import Flag
 from settings.settings import Setting
 
 
-class AudioEffectService(Process):
+class AudioEffectService(BaseService):
     """ Capture Service class.
     """
 
@@ -27,11 +23,10 @@ class AudioEffectService(Process):
         - hyperion_service      : hyperion service to send messages
         - settings_connector    : connector for settings updates
         """
-        self.__state = State()
-        self.__state.set_value(AudioEffectService.StateValue.OK)
-        self.__settings_connector = settings_connector
+        super(AudioEffectService, self).__init__(settings_connector,
+                                                 Flag.AUDIO_EFFECT_ENABLE)
+        self.state.set_value(AudioEffectService.StateValue.OK)
         self.__hyperion_service = hyperion_service
-        self.__load_settings()
 
     def __update_pixel_buffer(self):
         self.__data = self.scale_pixel_buffer(
@@ -40,25 +35,14 @@ class AudioEffectService(Process):
             self.__scale_height)
 
     def __load_settings(self):
-        # Clear alert before to avoid missing updates.
-        self.__settings_connector.signal.clear()
-
-        # Load the updated settings.
+        # Load the settings.
         self.__priority = self.__settings_connector.get_setting(
             Setting.AUDIO_EFFECT_PRIORITY)
         self.__frame_rate = self.__settings_connector.get_setting(
             Setting.AUDIO_EFFECT_FRAME_RATE)
 
-    def run(self):
-        # Check if the capture service is enabled or block until it is.
-        self.__settings_connector.get_flag(Flag.AUDIO_EFFECT_ENABLE).wait()
-
-        # Schedule the next run.
-        Timer(1 / self.__frame_rate, self.__run).start()
-
-        # Reload settings if needed.
-        if self.__settings_connector.signal.is_set():
-            self.__load_settings()
+    def __run_service(self):
+        # TODO timer
 
         # Capture audio.
         # TODO

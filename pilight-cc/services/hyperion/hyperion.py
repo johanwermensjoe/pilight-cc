@@ -5,10 +5,9 @@ import socket
 import struct
 
 # Multiprocessing
-from multiprocessing import Process
 from multiprocessing import Queue
 
-from services.manager import State
+from services.baseservice import BaseService
 
 from settings.settings import Setting
 from settings.settings import Flag
@@ -21,7 +20,7 @@ from message_pb2 import ImageRequest
 from message_pb2 import ClearRequest
 
 
-class HyperionService(Process):
+class HyperionService(BaseService):
     """ Hyperion Service class.
     """
 
@@ -35,12 +34,22 @@ class HyperionService(Process):
     def __init__(self, settings_connector):
         """ Constructor
         - settings_connector    : connector for settings updates
-        - state                 : state object for the service
         """
-        self.state = State()
+        super(HyperionService, self).__init__(settings_connector,
+                                              Flag.HYPERION_ENABLE)
         self.state.set_value(HyperionService.StateValue.DISCONNECTED)
         self.__queue = Queue()
-        self.__settings_connector = settings_connector
+
+    def __del__(self):
+        # Close the socket.
+        self.__socket.close()
+
+    def __load_settings(self):
+        # Load the updated settings.
+        self.__ip_address = self.__settings_connector.get_setting(
+            Setting.HYPERION_IP_ADDRESS)
+        self.__port = self.__settings_connector.get_setting(
+            Setting.HYPERION_PORT)
 
     def __connect(self):
         """ Attempt connection to hyperion server.
@@ -51,16 +60,6 @@ class HyperionService(Process):
 
         # Connect socket to the provided server.
         self.__socket.connect((self.__ip_address, self.__port))
-
-    def __load_settings(self):
-        # Clear alert before to avoid missing updates.
-        self.__settings_connector.signal.clear()
-
-        # Load the updated settings.
-        self.__ip_address = self.__settings_connector.get_setting(
-            Setting.HYPERION_IP_ADDRESS)
-        self.__port = self.__settings_connector.get_setting(
-            Setting.HYPERION_PORT)
 
     def __send_message(self, message):
         """ Send the given proto message to Hyperion.
@@ -83,31 +82,22 @@ class HyperionService(Process):
         if not reply.success:
             raise RuntimeError("Hyperion server error: " + reply.error)
 
-    def run(self):
+    def __run_service(self):
+
         try:
-            while True:
-                # Check if the hyperion service is enabled or block until it is.
-                self.__settings_connector.get_flag(Flag.HYPERION_ENABLE).wait()
+            # Try to connect to server if not connected.
+            if self.state.get_value() != \
+                    HyperionService.StateValue.CONNECTED:
+                self.__connect()
 
-                # Reload settings if needed.
-                if self.__settings_connector.signal.is_set():
-                    self.__load_settings()
-
-                try:
-                    # Try to connect to server if not connected.
-                    if self.state.get_value() != \
-                            HyperionService.StateValue.CONNECTED:
-                        self.__connect()
-
-                    # Fetch and send messages.
-                    self.__send_message(self.__queue.get())
-                except socket.timeout:
-                    self.state.set_value(HyperionService.StateValue.ERROR)
-                except socket.error:
-                    self.state.set_value(HyperionService.StateValue.ERROR)
-        finally:
-            # Close the socket.
-            self.__socket.close()
+            # Fetch and send messages.
+            self.__send_message(self.__queue.get())
+        except socket.timeout:
+            self.state.set_value(HyperionService.StateValue.ERROR)
+        except socket.error:
+            self.state.set_value(HyperionService.StateValue.ERROR)
+        except RuntimeError:
+            self.state.set_value(HyperionService.StateValue.ERROR)
 
     def send_color(self, color, priority, duration=-1):
         """ Send a static color to Hyperion.

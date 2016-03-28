@@ -35,4 +35,4 @@ class State(object):
         self.__value.value = new_value
 
     def get_value(self):
-        return  self.__value.value
+        return self.__value.value

@@ -7,16 +7,14 @@ from gi.repository import Gdk
 from gi.repository import GdkPixbuf
 
 # Multiprocessing
-from multiprocessing import Process
 from threading import Timer
-
-from services.manager import State
+from services.baseservice import BaseService
 
 from settings.settings import Flag
 from settings.settings import Setting
 
 
-class CaptureService(Process):
+class CaptureService(BaseService):
     """ Capture Service class.
     """
 
@@ -33,22 +31,12 @@ class CaptureService(Process):
         - hyperion_service      : hyperion service to send messages
         - settings_connector    : connector for settings updates
         """
-        self.__state = State()
+        super(CaptureService, self).__init__(settings_connector,
+                                             Flag.CAPTURE_ENABLE)
         self.__state.set_value(CaptureService.StateValue.OK)
-        self.__settings_connector = settings_connector
         self.__hyperion_service = hyperion_service
-        self.__load_settings()
-
-    def __update_pixel_buffer(self):
-        self.__data = self.scale_pixel_buffer(
-            self.get_pixel_buffer(),
-            self.__scale_width,
-            self.__scale_height)
 
     def __load_settings(self):
-        # Clear alert before to avoid missing updates.
-        self.__settings_connector.signal.clear()
-
         # Load the updated settings.
         self.__scale_width = self.__settings_connector.get_setting(
             Setting.CAPTURE_SCALE_WIDTH)
@@ -59,16 +47,16 @@ class CaptureService(Process):
         self.__frame_rate = self.__settings_connector.get_setting(
             Setting.CAPTURE_FRAME_RATE)
 
-    def run(self):
-        # Check if the capture service is enabled or block until it is.
-        self.__settings_connector.get_flag(Flag.CAPTURE_ENABLE).wait()
+    def __update_pixel_buffer(self):
+        self.__data = self.scale_pixel_buffer(
+            self.get_pixel_buffer(),
+            self.__scale_width,
+            self.__scale_height)
 
+    def __run_service(self):
         # Schedule the next run.
+        # TODO
         Timer(1 / self.__frame_rate, self.__run).start()
-
-        # Reload settings if needed.
-        if self.__settings_connector.signal.is_set():
-            self.__load_settings()
 
         # Capture and pass to hyperion service.
         self.__update_pixel_buffer()
