@@ -3,6 +3,7 @@
 # Multiprocessing
 from multiprocessing import Process
 from multiprocessing import Value
+from multiprocessing import Event
 
 import time
 
@@ -10,7 +11,7 @@ import time
 class BaseService(Process):
     """ Base Service class.
     Should have subclass with implementations for
-    __run_service and __load_settings.
+    _run_service, _on_shutdown and _load_settings.
     """
 
     def __init__(self, settings_connector=None, enable_flag=None):
@@ -18,28 +19,22 @@ class BaseService(Process):
         - hyperion_service      : hyperion service to send messages
         - settings_connector    : connector for settings updates
         """
+        super(BaseService, self).__init__()
         self.state = State()
-        self.__settings_connector = settings_connector
+        self.__shutdown_signal = Event()
         self.__enable_flag = enable_flag
-        self.__load_settings()
-
-    def __load_settings(self):
-        """ To be implemented by subclass.
-        Called periodically by the process if some setting has been changed.
-        Responsible for caching any setting needed during execution.
-        """
-        raise NotImplementedError("Please Implement this method")
-
-    def __run_service(self):
-        """ To be implemented by subclass.
-        Called periodically by the process, with settings updated
-        and enable flag checked before every run.
-        """
-        raise NotImplementedError("Please Implement this method")
+        self.__settings_connector = settings_connector
+        self._load_settings(settings_connector)
 
     def run(self):
-        """ Service execution method. """
+        """ Service execution method.
+        Should not be overridden.
+        """
         while True:
+            if self.__shutdown_signal.is_set():
+                self._on_shutdown()
+                break
+
             if self.__enable_flag:
                 # Check if the capture service is enabled or block until it is.
                 self.__settings_connector.get_flag(self.__enable_flag).wait()
@@ -49,9 +44,36 @@ class BaseService(Process):
                 if self.__settings_connector.signal.is_set():
                     # Clear alert before to avoid missing updates.
                     self.__settings_connector.signal.clear()
-                    self.__load_settings()
+                    self._load_settings(self.__settings_connector)
 
-            self.__run_service()
+            self._run_service()
+
+    def _run_service(self):
+        """ To be implemented by subclass.
+        Called periodically by the process, with settings updated
+        and enable flag checked before every run.
+        """
+        raise NotImplementedError("Please Implement this method")
+
+    def _on_shutdown(self):
+        """ To be implemented by subclass.
+        Called if the service is signaled to shutdown.
+        """
+        raise NotImplementedError("Please Implement this method")
+
+    def _load_settings(self, settings_connector):
+        """ To be implemented by subclass.
+        Called periodically by the process if some setting has been changed.
+        Responsible for caching any setting needed during execution.
+        - settings_connector    : connector to the settings to load
+        """
+        raise NotImplementedError("Please Implement this method")
+
+    def shutdown(self):
+        """ Signal the service to shutdown.
+        Can be called from any process.
+        """
+        self.__shutdown_signal.set()
 
 
 class State(object):
@@ -92,6 +114,6 @@ class DelayTimer(object):
     def delay(self):
         """ Delay the calling process for the time left of the delay.
         """
-        delta = self.__delay - (time.clock() - self._last_time)
+        delta = self.__delay - (time.clock() - self.__last_time)
         if delta > 0:
             time.sleep(delta)

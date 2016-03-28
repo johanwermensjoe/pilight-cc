@@ -40,16 +40,34 @@ class HyperionService(BaseService):
         self.state.set_value(HyperionService.StateValue.DISCONNECTED)
         self.__queue = Queue()
 
-    def __del__(self):
-        # Close the socket.
-        self.__socket.close()
-
-    def __load_settings(self):
+    def _load_settings(self, settings_connector):
         # Load the updated settings.
-        self.__ip_address = self.__settings_connector.get_setting(
+        self.__ip_address = settings_connector.get_setting(
             Setting.HYPERION_IP_ADDRESS)
-        self.__port = self.__settings_connector.get_setting(
+        self.__port = settings_connector.get_setting(
             Setting.HYPERION_PORT)
+
+    def _on_shutdown(self):
+        # Close the socket.
+        if self.__socket:
+            self.__socket.close()
+
+    def _run_service(self):
+
+        try:
+            # Try to connect to server if not connected.
+            if self.state.get_value() != \
+                    HyperionService.StateValue.CONNECTED:
+                self.__connect()
+
+            # Fetch and send messages.
+            self.__send_message(self.__queue.get())
+        except socket.timeout:
+            self.state.set_value(HyperionService.StateValue.ERROR)
+        except socket.error:
+            self.state.set_value(HyperionService.StateValue.ERROR)
+        except RuntimeError:
+            self.state.set_value(HyperionService.StateValue.ERROR)
 
     def __connect(self):
         """ Attempt connection to hyperion server.
@@ -71,7 +89,7 @@ class HyperionService(BaseService):
         binary_request = message.SerializeToString()
         binary_size = struct.pack(">I", len(binary_request))
         self.__socket.sendall(binary_size)
-        self.__socket.sendall(binary_request);
+        self.__socket.sendall(binary_request)
 
         # Receive a reply from Hyperion.
         size = struct.unpack(">I", self.__socket.recv(4))[0]
@@ -81,23 +99,6 @@ class HyperionService(BaseService):
         # Check the reply
         if not reply.success:
             raise RuntimeError("Hyperion server error: " + reply.error)
-
-    def __run_service(self):
-
-        try:
-            # Try to connect to server if not connected.
-            if self.state.get_value() != \
-                    HyperionService.StateValue.CONNECTED:
-                self.__connect()
-
-            # Fetch and send messages.
-            self.__send_message(self.__queue.get())
-        except socket.timeout:
-            self.state.set_value(HyperionService.StateValue.ERROR)
-        except socket.error:
-            self.state.set_value(HyperionService.StateValue.ERROR)
-        except RuntimeError:
-            self.state.set_value(HyperionService.StateValue.ERROR)
 
     def send_color(self, color, priority, duration=-1):
         """ Send a static color to Hyperion.

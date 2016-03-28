@@ -30,20 +30,18 @@ class AudioEffectService(BaseService):
         self.__hyperion_service = hyperion_service
         self.__delay_timer = DelayTimer(1 / self.__frame_rate)
 
-    def __update_pixel_buffer(self):
-        self.__data = self.scale_pixel_buffer(
-            self.get_pixel_buffer(),
-            self.__scale_width,
-            self.__scale_height)
-
-    def __load_settings(self):
+    def _load_settings(self, settings_connector):
         # Load the settings.
-        self.__priority = self.__settings_connector.get_setting(
+        self.__priority = settings_connector.get_setting(
             Setting.AUDIO_EFFECT_PRIORITY)
-        self.__frame_rate = self.__settings_connector.get_setting(
+        self.__frame_rate = settings_connector.get_setting(
             Setting.AUDIO_EFFECT_FRAME_RATE)
 
-    def __run_service(self):
+    def _on_shutdown(self):
+        # TODO
+        pass
+
+    def _run_service(self):
         self.__delay_timer.start()
 
         # Capture audio.
@@ -56,11 +54,7 @@ class AudioEffectService(BaseService):
 
         # Send message.
         # TODO
-        self.__hyperion_service.send_image(self.__scale_width,
-                                           self.__scale_height,
-                                           self.__data.get_pixels(),
-                                           self.__priority,
-                                           AudioEffectService._IMAGE_DURATION)
+
         # Wait until next run.
         self.__delay_timer.delay()
 

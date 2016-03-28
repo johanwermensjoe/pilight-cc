@@ -4,14 +4,19 @@ import os
 
 from multiprocessing import Manager
 from multiprocessing import Event
+from multiprocessing import get_logger
 
 from ConfigParser import RawConfigParser
+from ConfigParser import NoOptionError
+from ConfigParser import NoSectionError
 
 
 class SettingsConnector(object):
     def __init__(self, settings_manager):
         self.__settings_manager = settings_manager
         self.signal = Event()
+        # Set to force initial retrieval of settings.
+        self.signal.set()
 
     def get_flag(self, key):
         """ Get a flag
@@ -56,12 +61,14 @@ class Flag(object):
 class SettingsManager:
     """ Class which contains all settings.
     """
+    LOG = get_logger()
 
     class _BaseSetting(object):
-        def __init__(self, default, section, hidden):
+        def __init__(self, default, section, hidden, converter):
             self.default = default
             self.section = section
             self.hidden = hidden
+            self.converter = converter
 
     class _Section(object):
         CAPTURE = "CAPTURE"
@@ -73,20 +80,27 @@ class SettingsManager:
     # Settings with default value, section and visibility.
     _CONF = {
         # Persistent settings.
-        Setting.CAPTURE_SCALE_WIDTH: _BaseSetting(64, _Section.CAPTURE, False),
-        Setting.CAPTURE_SCALE_WIDTH: _BaseSetting(64, _Section.CAPTURE, False),
-        Setting.CAPTURE_PRIORITY: _BaseSetting(900, _Section.CAPTURE, False),
-        Setting.CAPTURE_FRAME_RATE: _BaseSetting(30, _Section.CAPTURE, False),
+        Setting.CAPTURE_SCALE_WIDTH: _BaseSetting(64, _Section.CAPTURE, False,
+                                                  int),
+        Setting.CAPTURE_SCALE_HEIGHT: _BaseSetting(64, _Section.CAPTURE, False,
+                                                   int),
+        Setting.CAPTURE_PRIORITY: _BaseSetting(900, _Section.CAPTURE, False,
+                                               int),
+        Setting.CAPTURE_FRAME_RATE: _BaseSetting(30, _Section.CAPTURE, False,
+                                                 int),
 
         Setting.HYPERION_IP_ADDRESS: _BaseSetting("127.0.0.1",
                                                   _Section.HYPERION,
-                                                  False),
-        Setting.HYPERION_PORT: _BaseSetting(19945, _Section.HYPERION, False),
+                                                  False, str),
+        Setting.HYPERION_PORT: _BaseSetting(19945, _Section.HYPERION, False,
+                                            int),
 
         Setting.AUDIO_EFFECT_SPOTIFY_ENABLE: _BaseSetting(False, _Section.AUDIO,
-                                                          False),
-        Setting.AUDIO_EFFECT_PRIORITY: _BaseSetting(800, _Section.AUDIO, False),
-        Setting.AUDIO_EFFECT_FRAME_RATE: _BaseSetting(60, _Section.AUDIO, False)
+                                                          False, bool),
+        Setting.AUDIO_EFFECT_PRIORITY: _BaseSetting(800, _Section.AUDIO, False,
+                                                    int),
+        Setting.AUDIO_EFFECT_FRAME_RATE: _BaseSetting(60, _Section.AUDIO, False,
+                                                      int)
     }
 
     # Flags with initial value.
@@ -128,6 +142,7 @@ class SettingsManager:
         """
         Save the current config file to storage.
         """
+        self.LOG.info("Saving settings")
         try:
             config = RawConfigParser()
 
@@ -151,6 +166,7 @@ class SettingsManager:
         """
         Read config file, using default values for missing settings.
         """
+        self.LOG.info("Reading settings")
         # Parse config file.
         config = RawConfigParser(allow_no_value=True)
         if os.path.exists(SettingsManager._CONFIG_PATH):
@@ -159,15 +175,15 @@ class SettingsManager:
         # Make sure the required values are set.
         self.__settings = {}
         for key, setting in SettingsManager._CONF.iteritems():
-            if config.has_section(setting.section):
+            try:
                 val = config.get(setting.section, key)
-            else:
+            except (NoSectionError, NoOptionError):
                 val = None
             if not val:
                 # Use default value instead.
                 val = setting.default
 
-            self.__settings[key] = val
+            self.__settings[key] = setting.converter(val)
 
     def create_connector(self):
         connector = SettingsConnector(self)

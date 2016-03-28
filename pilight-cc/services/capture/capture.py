@@ -34,28 +34,26 @@ class CaptureService(BaseService):
         """
         super(CaptureService, self).__init__(settings_connector,
                                              Flag.CAPTURE_ENABLE)
-        self.__state.set_value(CaptureService.StateValue.OK)
+        self.state.set_value(CaptureService.StateValue.OK)
         self.__hyperion_service = hyperion_service
         self.__delay_timer = DelayTimer(1 / self.__frame_rate)
 
-    def __load_settings(self):
+    def _load_settings(self, settings_connector):
         # Load the updated settings.
-        self.__scale_width = self.__settings_connector.get_setting(
+        self.__scale_width = settings_connector.get_setting(
             Setting.CAPTURE_SCALE_WIDTH)
-        self.__scale_height = self.__settings_connector.get_setting(
+        self.__scale_height = settings_connector.get_setting(
             Setting.CAPTURE_SCALE_HEIGHT)
-        self.__priority = self.__settings_connector.get_setting(
+        self.__priority = settings_connector.get_setting(
             Setting.CAPTURE_PRIORITY)
-        self.__frame_rate = self.__settings_connector.get_setting(
+        self.__frame_rate = settings_connector.get_setting(
             Setting.CAPTURE_FRAME_RATE)
 
-    def __update_pixel_buffer(self):
-        self.__data = self.scale_pixel_buffer(
-            self.get_pixel_buffer(),
-            self.__scale_width,
-            self.__scale_height)
+    def _on_shutdown(self):
+        # TODO
+        pass
 
-    def __run_service(self):
+    def _run_service(self):
         self.__delay_timer.start()
 
         # Capture and pass to hyperion service.
@@ -67,6 +65,12 @@ class CaptureService(BaseService):
                                            CaptureService._IMAGE_DURATION)
         # Wait until next run.
         self.__delay_timer.delay()
+
+    def __update_pixel_buffer(self):
+        self.__data = self.scale_pixel_buffer(
+            self.get_pixel_buffer(),
+            self.__scale_width,
+            self.__scale_height)
 
     @staticmethod
     def get_pixel_buffer():
