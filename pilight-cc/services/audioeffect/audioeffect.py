@@ -1,6 +1,7 @@
 """ Audio Effect service module. """
 
-from services.baseservice import BaseService
+from services.service import BaseService
+from services.service import DelayTimer
 
 from settings.settings import Flag
 from settings.settings import Setting
@@ -27,6 +28,7 @@ class AudioEffectService(BaseService):
                                                  Flag.AUDIO_EFFECT_ENABLE)
         self.state.set_value(AudioEffectService.StateValue.OK)
         self.__hyperion_service = hyperion_service
+        self.__delay_timer = DelayTimer(1 / self.__frame_rate)
 
     def __update_pixel_buffer(self):
         self.__data = self.scale_pixel_buffer(
@@ -42,7 +44,7 @@ class AudioEffectService(BaseService):
             Setting.AUDIO_EFFECT_FRAME_RATE)
 
     def __run_service(self):
-        # TODO timer
+        self.__delay_timer.start()
 
         # Capture audio.
         # TODO
@@ -59,6 +61,8 @@ class AudioEffectService(BaseService):
                                            self.__data.get_pixels(),
                                            self.__priority,
                                            AudioEffectService._IMAGE_DURATION)
+        # Wait until next run.
+        self.__delay_timer.delay()
 
     @staticmethod
     def read_audio():

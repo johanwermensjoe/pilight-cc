@@ -7,7 +7,7 @@ import struct
 # Multiprocessing
 from multiprocessing import Queue
 
-from services.baseservice import BaseService
+from services.service import BaseService
 
 from settings.settings import Setting
 from settings.settings import Flag

@@ -21,15 +21,15 @@ class CaptureTestCase(unittest.TestCase):
         scale = 2
         pb = CaptureService.get_pixel_buffer()
         pb2 = CaptureService.scale_pixel_buffer(pb, pb.get_width() / scale,
-                                         pb.get_height() / scale)
+                                                pb.get_height() / scale)
         self.assertEqual(pb.get_byte_length(),
-                         pb2.get_byte_length() * scale**2)
+                         pb2.get_byte_length() * scale ** 2)
 
     def test_capture_rate(self):
         def capture_and_scale():
             pb = CaptureService.get_pixel_buffer()
             CaptureService.scale_pixel_buffer(pb, pb.get_width() / 2,
-                                       pb.get_height() / 2)
+                                              pb.get_height() / 2)
 
         fps = 100 / timeit(capture_and_scale, number=100)
         print "\nCapture rate:"

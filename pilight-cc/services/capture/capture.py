@@ -8,7 +8,8 @@ from gi.repository import GdkPixbuf
 
 # Multiprocessing
 from threading import Timer
-from services.baseservice import BaseService
+from services.service import BaseService
+from services.service import DelayTimer
 
 from settings.settings import Flag
 from settings.settings import Setting
@@ -35,6 +36,7 @@ class CaptureService(BaseService):
                                              Flag.CAPTURE_ENABLE)
         self.__state.set_value(CaptureService.StateValue.OK)
         self.__hyperion_service = hyperion_service
+        self.__delay_timer = DelayTimer(1 / self.__frame_rate)
 
     def __load_settings(self):
         # Load the updated settings.
@@ -54,9 +56,7 @@ class CaptureService(BaseService):
             self.__scale_height)
 
     def __run_service(self):
-        # Schedule the next run.
-        # TODO
-        Timer(1 / self.__frame_rate, self.__run).start()
+        self.__delay_timer.start()
 
         # Capture and pass to hyperion service.
         self.__update_pixel_buffer()
@@ -65,6 +65,8 @@ class CaptureService(BaseService):
                                            self.__data.get_pixels(),
                                            self.__priority,
                                            CaptureService._IMAGE_DURATION)
+        # Wait until next run.
+        self.__delay_timer.delay()
 
     @staticmethod
     def get_pixel_buffer():

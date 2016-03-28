@@ -66,9 +66,9 @@ class SettingsManager:
     class _Section(object):
         CAPTURE = "CAPTURE"
         HYPERION = "HYPERION"
-        AUDIO = "AUDIO"
+        AUDIO = "AUDIO_EFFECT"
 
-    _CONFIG_PATH = "pilight-cc.config"
+    _CONFIG_PATH = "../pilight-cc.config"
 
     # Settings with default value, section and visibility.
     _CONF = {
@@ -119,7 +119,7 @@ class SettingsManager:
         """ Initialize the setting flags.
         """
         for key, is_set in self._FLAGS.iteritems():
-            event = Event()
+            event = self.__manager.Event()
             if is_set:
                 event.set()
             self.__flags[key] = event
@@ -131,7 +131,7 @@ class SettingsManager:
         try:
             config = RawConfigParser()
 
-            for key, value in self.__settings.iteritems():
+            for (key, value) in self.__settings.items():
                 setting = SettingsManager._CONF[key]
 
                 # Create section if needed.
@@ -159,7 +159,10 @@ class SettingsManager:
         # Make sure the required values are set.
         self.__settings = {}
         for key, setting in SettingsManager._CONF.iteritems():
-            val = config.get(setting.section, key)
+            if config.has_section(setting.section):
+                val = config.get(setting.section, key)
+            else:
+                val = None
             if not val:
                 # Use default value instead.
                 val = setting.default
@@ -168,7 +171,7 @@ class SettingsManager:
 
     def create_connector(self):
         connector = SettingsConnector(self)
-        self.__connectors += connector
+        self.__connectors.append(connector)
         return connector
 
     def get_flag(self, key):
