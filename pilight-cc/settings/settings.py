@@ -4,7 +4,6 @@ import os
 
 from multiprocessing import Manager
 from multiprocessing import Event
-from multiprocessing import get_logger
 
 from ConfigParser import RawConfigParser
 from ConfigParser import NoOptionError
@@ -15,14 +14,6 @@ class SettingsConnector(object):
     def __init__(self, settings_manager):
         self.__settings_manager = settings_manager
         self.signal = Event()
-        # Set to force initial retrieval of settings.
-        self.signal.set()
-
-    def get_flag(self, key):
-        """ Get a flag
-        - key   : the key of the setting
-        """
-        return self.__settings_manager.get_flag(key)
 
     def get_setting(self, key):
         """ Get a setting value.
@@ -52,16 +43,9 @@ class Setting(object):
     AUDIO_EFFECT_FRAME_RATE = 'aeFrameRate'
 
 
-class Flag(object):
-    CAPTURE_ENABLE = 'uCaptureEnable'
-    AUDIO_EFFECT_ENABLE = 'uAudioEffectEnable'
-    HYPERION_ENABLE = 'uHyperionEnable'
-
-
 class SettingsManager:
     """ Class which contains all settings.
     """
-    LOG = get_logger()
 
     class _BaseSetting(object):
         def __init__(self, default, section, hidden, converter):
@@ -103,25 +87,14 @@ class SettingsManager:
                                                       int)
     }
 
-    # Flags with initial value.
-    _FLAGS = {
-        Flag.CAPTURE_ENABLE: False,
-        Flag.AUDIO_EFFECT_ENABLE: False,
-        Flag.HYPERION_ENABLE: True
-    }
-
     def __init__(self):
         """ Constructor
         """
         self.__manager = Manager()
         self.__settings = self.__manager.dict()
         self.__flags = self.__manager.dict()
-        self.__init_flags()
         self.__read_settings()
         self.__connectors = []
-
-    def __del__(self):
-        self.__save_settings()
 
     def __notify_connectors(self):
         """ Notifies the connectors that some setting has changed.
@@ -129,20 +102,11 @@ class SettingsManager:
         for c in self.__connectors:
             c.signal.set()
 
-    def __init_flags(self):
-        """ Initialize the setting flags.
-        """
-        for key, is_set in self._FLAGS.iteritems():
-            event = self.__manager.Event()
-            if is_set:
-                event.set()
-            self.__flags[key] = event
-
-    def __save_settings(self):
+    def save_settings(self):
         """
         Save the current config file to storage.
         """
-        self.LOG.info("Saving settings")
+        print "Saving settings"
         try:
             config = RawConfigParser()
 
@@ -166,7 +130,7 @@ class SettingsManager:
         """
         Read config file, using default values for missing settings.
         """
-        self.LOG.info("Reading settings")
+        print "Reading settings"
         # Parse config file.
         config = RawConfigParser(allow_no_value=True)
         if os.path.exists(SettingsManager._CONFIG_PATH):
@@ -189,12 +153,6 @@ class SettingsManager:
         connector = SettingsConnector(self)
         self.__connectors.append(connector)
         return connector
-
-    def get_flag(self, key):
-        """ Get a flag
-        - key   : the key of the setting
-        """
-        return self.__flags[key]
 
     def get_setting(self, key):
         """ Get a setting value.

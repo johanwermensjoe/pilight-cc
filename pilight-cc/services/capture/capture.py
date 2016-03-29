@@ -1,17 +1,15 @@
 """ Screen capture service module. """
 
 import gi
-
 gi.require_version('Gdk', '3.0')
 from gi.repository import Gdk
 from gi.repository import GdkPixbuf
 
+
 # Multiprocessing
-from threading import Timer
 from services.service import BaseService
 from services.service import DelayTimer
 
-from settings.settings import Flag
 from settings.settings import Setting
 
 
@@ -32,8 +30,7 @@ class CaptureService(BaseService):
         - hyperion_service      : hyperion service to send messages
         - settings_connector    : connector for settings updates
         """
-        super(CaptureService, self).__init__(settings_connector,
-                                             Flag.CAPTURE_ENABLE)
+        super(CaptureService, self).__init__(settings_connector)
         self.state.set_value(CaptureService.StateValue.OK)
         self.__hyperion_service = hyperion_service
         self.__delay_timer = DelayTimer(1 / self.__frame_rate)
@@ -67,10 +64,14 @@ class CaptureService(BaseService):
         self.__delay_timer.delay()
 
     def __update_pixel_buffer(self):
+        # Gdk.threads_enter()
+
         self.__data = self.scale_pixel_buffer(
             self.get_pixel_buffer(),
             self.__scale_width,
             self.__scale_height)
+
+        # Gdk.threads_leave()
 
     @staticmethod
     def get_pixel_buffer():

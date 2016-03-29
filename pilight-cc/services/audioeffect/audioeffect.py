@@ -3,7 +3,6 @@
 from services.service import BaseService
 from services.service import DelayTimer
 
-from settings.settings import Flag
 from settings.settings import Setting
 
 
@@ -24,8 +23,7 @@ class AudioEffectService(BaseService):
         - hyperion_service      : hyperion service to send messages
         - settings_connector    : connector for settings updates
         """
-        super(AudioEffectService, self).__init__(settings_connector,
-                                                 Flag.AUDIO_EFFECT_ENABLE)
+        super(AudioEffectService, self).__init__(settings_connector)
         self.state.set_value(AudioEffectService.StateValue.OK)
         self.__hyperion_service = hyperion_service
         self.__delay_timer = DelayTimer(1 / self.__frame_rate)

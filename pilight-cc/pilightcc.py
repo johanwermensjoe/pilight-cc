@@ -1,7 +1,8 @@
 import gi
-
 gi.require_version('Gtk', '3.0')
+
 from gi.repository import Gtk
+from gi.repository import GObject, Gdk
 
 from services.manager import ServiceManager
 
@@ -10,14 +11,19 @@ def hello(button):
     pass
 
 
-def exit_app():
+def exit_app(a, b):
     service_manager.shutdown()
+    print "Shutdown"
     Gtk.main_quit()
 
 
 if __name__ == '__main__':
     service_manager = ServiceManager()
     service_manager.start()
+
+    GObject.threads_init()
+    Gdk.threads_init()
+    # Gdk.threads_enter()
 
     builder = Gtk.Builder()
     builder.add_from_file("../res/pilightcc.glade")
@@ -29,3 +35,5 @@ if __name__ == '__main__':
     window = builder.get_object("window1")
     window.show_all()
     Gtk.main()
+
+    # Gdk.threads_leave()

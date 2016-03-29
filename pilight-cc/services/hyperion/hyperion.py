@@ -10,7 +10,6 @@ from multiprocessing import Queue
 from services.service import BaseService
 
 from settings.settings import Setting
-from settings.settings import Flag
 
 # Protocol buffer message
 from message_pb2 import HyperionRequest
@@ -31,12 +30,14 @@ class HyperionService(BaseService):
         DISCONNECTED = 2
         ERROR = 3
 
+    # Delay on error in seconds.
+    __ERROR_DELAY = 5
+
     def __init__(self, settings_connector):
         """ Constructor
         - settings_connector    : connector for settings updates
         """
-        super(HyperionService, self).__init__(settings_connector,
-                                              Flag.HYPERION_ENABLE)
+        super(HyperionService, self).__init__(settings_connector)
         self.state.set_value(HyperionService.StateValue.DISCONNECTED)
         self.__queue = Queue()
 
@@ -62,10 +63,9 @@ class HyperionService(BaseService):
 
             # Fetch and send messages.
             self.__send_message(self.__queue.get())
-        except socket.timeout:
+        except (socket.timeout, socket.error):
             self.state.set_value(HyperionService.StateValue.ERROR)
-        except socket.error:
-            self.state.set_value(HyperionService.StateValue.ERROR)
+            self._safe_delay(HyperionService.__ERROR_DELAY)
         except RuntimeError:
             self.state.set_value(HyperionService.StateValue.ERROR)
 
