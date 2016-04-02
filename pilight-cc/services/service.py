@@ -1,75 +1,79 @@
 """ Service module. """
 
 # Multiprocessing
-# from multiprocessing import Process
-from multiprocessing import Value
 from multiprocessing import Event
-from threading import Thread
 
 from time import sleep, clock
 
+from zmq import Context
+import zmq
 
-class BaseService(Thread):
+
+class BaseService(object):
     """ Base Service class.
     Should have subclass with implementations for
     _run_service, _on_shutdown and _load_settings.
+    Implementation for _init_service is optional.
     """
 
     # The delay interval for shutdown monitoring, safe delays.
     __SAFE_DELAY_INCREMENT = 0.5
 
-    def __init__(self, settings_connector=None):
+    def __init__(self, port, enable_settings=False):
         """ Constructor
-        - hyperion_service      : hyperion service to send messages
-        - settings_connector    : connector for settings updates
+        - port      : the 0mq communication port
         """
-        super(BaseService, self).__init__()
         self.state = State()
-        self.__shutdown_signal = Event()
-        self.__enable_signal = Event()
-        self.__settings_connector = settings_connector
-        self._load_settings(settings_connector)
+        self.__require_settings = enable_settings
+
+        # Setup the 0mq channel.
+        context = Context()
+        self.__socket = context.socket(zmq.PAIR)
+        self.__socket.bind("tcp://*:%s" % port)
 
     def run(self):
         """ Service execution method.
         Should not be overridden.
         """
+        self._init_service()
         while True:
-            self.__enable_signal.wait()
-
-            if self.__shutdown_signal.is_set():
+            if self.__shutdown:
                 self._on_shutdown()
                 break
-
-            if self.__settings_connector:
+            if self.__require_settings:
                 # Reload settings if needed.
                 if self.__settings_connector.signal.is_set():
                     # Clear alert before to avoid missing updates.
-                    self.__settings_connector.signal.clear()
                     self._load_settings(self.__settings_connector)
 
             self._run_service()
+
+    def _init_service(self):
+        """ Can be implemented by subclass.
+        Called initially by the process before the first call to _run_service.
+        """
+        pass
 
     def _run_service(self):
         """ To be implemented by subclass.
         Called periodically by the process, with settings updated
         and enable flag checked before every run.
         """
-        raise NotImplementedError("Please Implement this method")
+        raise NotImplementedError("Please implement this method")
 
     def _on_shutdown(self):
         """ To be implemented by subclass.
         Called if the service is signaled to shutdown.
         """
-        raise NotImplementedError("Please Implement this method")
+        raise NotImplementedError("Please implement this method")
 
-    def _load_settings(self, settings_connector):
+    def _load_settings(self, settings):
         """ To be implemented by subclass.
         Called periodically by the process if some setting has been changed.
         Responsible for caching any setting needed during execution.
-        - settings_connector    : connector to the settings to load
+        - settings    : the updated settings
         """
-        raise NotImplementedError("Please Implement this method")
+        raise NotImplementedError("Please implement this method")
 
     def _safe_delay(self, delay):
         while delay > BaseService.__SAFE_DELAY_INCREMENT:
@@ -79,10 +83,29 @@ class BaseService(Thread):
                 return
         sleep(delay)
 
+
+class ServiceConnector(object):
+
+    __HOST_ADDRESS = "127.0.0.1"
+    __MAX_TRIES = 100
+
+    def __init__(self, min_port, max_port):
+        # Setup the 0mq channel to the started service.
+        context = Context()
+        self.__socket = context.socket(zmq.PAIR)
+        self.__port = self.__socket.bind_to_random_port(
+            ServiceConnector.__HOST_ADDRESS, min_port, max_port,
+            ServiceConnector.__MAX_TRIES)
+
+    def get_port(self):
+        """ Return the bound port. """
+        return self.__port
+
     def shutdown(self):
         """ Signal the service to shutdown.
         Can be called from any process.
         """
+        self.connect()
         self.__shutdown_signal.set()
         self.enable(True)
 
@@ -98,21 +121,21 @@ class BaseService(Thread):
 
 
 class State(object):
-    """ State class.
-    A process/thread safe state.
-    """
-
     def __init__(self):
         """ Constructor """
-        self.__value = Value("i")
+        self.__state = {'value': None, 'msg': None}
 
     def set_value(self, new_value):
         """ Setter for state code. """
-        self.__value.value = new_value
+        self.__state['value'] = new_value
 
-    def get_value(self):
-        """ Getter for state code. """
-        return self.__value.value
+    def set_message(self, message):
+        """ Setter for state code. """
+        self.__state['msg'] = message
+
+    def get_state(self):
+        """ Getter for state. """
+        return self.__state
 
 
 class DelayTimer(object):
@@ -138,3 +161,5 @@ class DelayTimer(object):
         delta = self.__delay - (clock() - self.__last_time)
         if delta > 0:
             sleep(delta)
+        # Update the time of the last call.
+        self.__last_time = clock()

@@ -6,12 +6,19 @@ from gi.repository import Gdk
 from gi.repository import GdkPixbuf
 
 
-# Multiprocessing
+# Service
 from services.service import BaseService
 from services.service import DelayTimer
 
+# Application
+from services.hyperion.hyperion import HyperionConnector
+from services.hyperion.hyperion import HyperionError
 from settings.settings import Setting
 
+
+if __name__ == '__main__':
+    capture_service = CaptureService()
+    capture_service.run()
 
 class CaptureService(BaseService):
     """ Capture Service class.
@@ -25,30 +32,28 @@ class CaptureService(BaseService):
 
     _IMAGE_DURATION = 500
 
-    def __init__(self, hyperion_service, settings_connector):
+    def __init__(self):
         """ Constructor
         - hyperion_service      : hyperion service to send messages
         - settings_connector    : connector for settings updates
         """
-        super(CaptureService, self).__init__(settings_connector)
         self.state.set_value(CaptureService.StateValue.OK)
-        self.__hyperion_service = hyperion_service
         self.__delay_timer = DelayTimer(1 / self.__frame_rate)
 
-    def _load_settings(self, settings_connector):
-        # Load the updated settings.
-        self.__scale_width = settings_connector.get_setting(
-            Setting.CAPTURE_SCALE_WIDTH)
-        self.__scale_height = settings_connector.get_setting(
-            Setting.CAPTURE_SCALE_HEIGHT)
-        self.__priority = settings_connector.get_setting(
-            Setting.CAPTURE_PRIORITY)
-        self.__frame_rate = settings_connector.get_setting(
-            Setting.CAPTURE_FRAME_RATE)
+    def _load_settings(self, settings):
+        self.__ip_address = settings[Setting.HYPERION_IP_ADDRESS]
+        self.__port = settings[Setting.HYPERION_PORT]
+        self.__scale_width = settings[Setting.CAPTURE_SCALE_WIDTH]
+        self.__scale_height = settings[Setting.CAPTURE_SCALE_HEIGHT]
+        self.__priority = settings[Setting.CAPTURE_PRIORITY]
+        self.__frame_rate = settings[Setting.CAPTURE_FRAME_RATE]
 
     def _on_shutdown(self):
         # TODO
         pass
+
+    def _init_service(self):
+        self.__delay_timer.start()
 
     def _run_service(self):
         self.__delay_timer.start()
@@ -62,16 +67,13 @@ class CaptureService(BaseService):
                                            CaptureService._IMAGE_DURATION)
         # Wait until next run.
         self.__delay_timer.delay()
+        self.__delay_timer.start()
 
     def __update_pixel_buffer(self):
-        # Gdk.threads_enter()
-
         self.__data = self.scale_pixel_buffer(
             self.get_pixel_buffer(),
             self.__scale_width,
             self.__scale_height)
-
-        # Gdk.threads_leave()
 
     @staticmethod
     def get_pixel_buffer():

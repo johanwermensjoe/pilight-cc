@@ -1,16 +1,26 @@
 """ Service Manager module. """
 
-from services.capture.capture import CaptureService
-from services.hyperion.hyperion import HyperionService
-from services.audioeffect.audioeffect import AudioEffectService
+from subprocess import call
+
+from services.service import ServiceConnector
 
 from settings.settings import SettingsManager
+
+from os.path import abspath, dirname, join
 
 
 class ServiceManager(object):
     """ Service Manager class.
     Maintains and controls all services.
     """
+
+    __CAPTURE_SERVICE = join(abspath(dirname(__file__)), "services", "capture",
+                             "capture.py")
+    __AUDIO_EFFECT_SERVICE = join(abspath(dirname(__file__)), "services",
+                                  "audioeffect", "audioeffect.py")
+
+    __MIN_PORT = 40000
+    __MAX_PORT = 50000
 
     def __init__(self):
         """ Constructor """
@@ -20,34 +30,31 @@ class ServiceManager(object):
         # Setup all services.
         self.__services = []
 
-        settings_connector = self.settings_manager.create_connector()
-        self.hyperion_service = HyperionService(settings_connector)
-        self.hyperion_service.enable(True)
-        self.__services.append(self.hyperion_service)
-
-        settings_connector = self.settings_manager.create_connector()
-        self.capture_service = CaptureService(self.hyperion_service,
-                                              settings_connector)
+        self.capture_service = self.__create_service(
+            ServiceManager.__CAPTURE_SERVICE)
         self.capture_service.enable(True)
-        self.__services.append(self.capture_service)
 
-        # settings_connector = self.settings_manager.create_connector()
         # self.audio_effect_service = AudioEffectService(self.hyperion_service,
         #                                                settings_connector)
-        # self.__services.append(self.audio_effect_service)
+
+    def __create_service(self, service_path, port):
+        # Start the service.
+        connector = ServiceConnector(ServiceManager.__MIN_PORT,
+                                     ServiceManager.__MAX_PORT)
+        self.__services.append(connector)
+        call(["python", service_path, connector.get_port()])
+        return ServiceConnector(connector)
 
     def start(self):
         """ Start services. """
-        self.hyperion_service.start()
-        self.capture_service.start()
-        # self.audio_effect_service.start()
+        for service in self.__services:
+            service.start()
 
     def shutdown(self):
         """ Shutdown services and save settings. """
         # Shutdown services.
         for service in self.__services:
             service.shutdown()
-            service.join()
 
         # Save all settings to storage.
         self.settings_manager.save_settings()

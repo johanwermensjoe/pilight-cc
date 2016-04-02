@@ -5,9 +5,8 @@ import socket
 import struct
 
 # Multiprocessing
-from multiprocessing import Queue
-
-from services.service import BaseService
+from Queue import Queue
+from threading import Thread
 
 from settings.settings import Setting
 
@@ -19,57 +18,37 @@ from message_pb2 import ImageRequest
 from message_pb2 import ClearRequest
 
 
-class HyperionService(BaseService):
+class HyperionError(Exception):
+    """ Error raised for hyperion connection errors.
+
+    Attributes:
+        msg     -- explanation of the error
+    """
+
+    def __init__(self, msg):
+        self.msg = msg
+
+
+class HyperionConnector(Thread):
     """ Hyperion Service class.
     """
 
-    class StateValue(object):
-        """ State Value class.
-        """
-        CONNECTED = 1
-        DISCONNECTED = 2
-        ERROR = 3
-
-    # Delay on error in seconds.
-    __ERROR_DELAY = 5
-
-    def __init__(self, settings_connector):
+    def __init__(self, settings):
         """ Constructor
-        - settings_connector    : connector for settings updates
+        - settings    : settings dictionary
         """
-        super(HyperionService, self).__init__(settings_connector)
-        self.state.set_value(HyperionService.StateValue.DISCONNECTED)
-        self.__queue = Queue()
+        try:
+            self.__connect(settings[Setting.HYPERION_IP_ADDRESS],
+                           settings[Setting.HYPERION_PORT])
+        except Exception:
+            raise HyperionError("Connection failed")
 
-    def _load_settings(self, settings_connector):
-        # Load the updated settings.
-        self.__ip_address = settings_connector.get_setting(
-            Setting.HYPERION_IP_ADDRESS)
-        self.__port = settings_connector.get_setting(
-            Setting.HYPERION_PORT)
-
-    def _on_shutdown(self):
+    def __del__(self):
         # Close the socket.
         if self.__socket:
             self.__socket.close()
 
-    def _run_service(self):
-
-        try:
-            # Try to connect to server if not connected.
-            if self.state.get_value() != \
-                    HyperionService.StateValue.CONNECTED:
-                self.__connect()
-
-            # Fetch and send messages.
-            self.__send_message(self.__queue.get())
-        except (socket.timeout, socket.error):
-            self.state.set_value(HyperionService.StateValue.ERROR)
-            self._safe_delay(HyperionService.__ERROR_DELAY)
-        except RuntimeError:
-            self.state.set_value(HyperionService.StateValue.ERROR)
-
-    def __connect(self):
+    def __connect(self, ip_address, port):
         """ Attempt connection to hyperion server.
         """
         # Create a new socket.
@@ -77,7 +56,7 @@ class HyperionService(BaseService):
         self.__socket.settimeout(2)
 
         # Connect socket to the provided server.
-        self.__socket.connect((self.__ip_address, self.__port))
+        self.__socket.connect((ip_address, port))
 
     def __send_message(self, message):
         """ Send the given proto message to Hyperion.
@@ -98,7 +77,7 @@ class HyperionService(BaseService):
 
         # Check the reply
         if not reply.success:
-            raise RuntimeError("Hyperion server error: " + reply.error)
+            raise HyperionError("Hyperion server error: " + reply.error)
 
     def send_color(self, color, priority, duration=-1):
         """ Send a static color to Hyperion.
@@ -114,8 +93,7 @@ class HyperionService(BaseService):
         color_request.priority = priority
         color_request.duration = duration
 
-        # Add to queue.
-        self.__queue.put(request)
+        self.__send_message(request)
 
     def send_image(self, width, height, data, priority, duration=-1):
         """ Send an image to Hyperion.
@@ -135,8 +113,7 @@ class HyperionService(BaseService):
         image_request.priority = priority
         image_request.duration = duration
 
-        # Add to queue.
-        self.__queue.put(request)
+        self.__send_message(request)
 
     def clear(self, priority):
         """ Clear the given priority channel.
@@ -148,8 +125,7 @@ class HyperionService(BaseService):
         clear_request = request.Extensions[ClearRequest.clearRequest]
         clear_request.priority = priority
 
-        # Add to queue.
-        self.__queue.put(request)
+        self.__send_message(request)
 
     def clear_all(self):
         """ Clear all active priority channels.
@@ -158,5 +134,4 @@ class HyperionService(BaseService):
         request = HyperionRequest()
         request.command = HyperionRequest.CLEARALL
 
-        # Add to queue.
-        self.__queue.put(request)
+        self.__send_message(request)
