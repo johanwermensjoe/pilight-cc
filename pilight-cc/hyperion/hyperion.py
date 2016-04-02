@@ -4,12 +4,6 @@
 import socket
 import struct
 
-# Multiprocessing
-from Queue import Queue
-from threading import Thread
-
-from settings.settings import Setting
-
 # Protocol buffer message
 from message_pb2 import HyperionRequest
 from message_pb2 import HyperionReply
@@ -29,17 +23,15 @@ class HyperionError(Exception):
         self.msg = msg
 
 
-class HyperionConnector(Thread):
+class HyperionConnector(object):
     """ Hyperion Service class.
     """
 
-    def __init__(self, settings):
+    def __init__(self, ip_address, port):
         """ Constructor
-        - settings    : settings dictionary
         """
         try:
-            self.__connect(settings[Setting.HYPERION_IP_ADDRESS],
-                           settings[Setting.HYPERION_PORT])
+            self.__connect(ip_address, port)
         except Exception:
             raise HyperionError("Connection failed")
 
