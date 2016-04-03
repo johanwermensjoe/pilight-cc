@@ -1,32 +1,14 @@
 """ Settings module. """
 
-import os
+# Threading
+from threading import RLock
+from threading import Lock
 
-from multiprocessing import Manager
-from multiprocessing import Event
-
+# Config parsing
+from os.path import exists
 from ConfigParser import RawConfigParser
 from ConfigParser import NoOptionError
 from ConfigParser import NoSectionError
-
-
-class SettingsConnector(object):
-    def __init__(self, settings_manager):
-        self.__settings_manager = settings_manager
-        self.signal = Event()
-
-    def get_setting(self, key):
-        """ Get a setting value.
-        - key   : the key of the setting
-        """
-        return self.__settings_manager.get_setting(key)
-
-    def set_setting(self, key, value):
-        """ Set a setting value.
-        - key   : the key of the setting
-        - value : the value of the setting
-        """
-        self.__settings_manager.set_setting(key, value)
 
 
 class Setting(object):
@@ -90,17 +72,22 @@ class SettingsManager:
     def __init__(self):
         """ Constructor
         """
-        self.__manager = Manager()
-        self.__settings = self.__manager.dict()
-        self.__flags = self.__manager.dict()
-        self.__read_settings()
-        self.__connectors = []
+        self.__settings_lock = RLock()
+        self.__listener_lock = Lock()
 
-    def __notify_connectors(self):
+        self.__settings = {}
+        self.__read_settings()
+        self.__listeners = []
+
+    def __notify_listeners(self):
         """ Notifies the connectors that some setting has changed.
         """
-        for c in self.__connectors:
-            c.signal.set()
+        try:
+            self.__listener_lock.acquire()
+            for c in self.__listeners:
+                c(self.get_settings())
+        finally:
+            self.__listener_lock.release()
 
     def save_settings(self):
         """
@@ -110,7 +97,7 @@ class SettingsManager:
         try:
             config = RawConfigParser()
 
-            for (key, value) in self.__settings.items():
+            for key, value in self.get_settings().iteritems():
                 setting = SettingsManager._CONF[key]
 
                 # Create section if needed.
@@ -133,7 +120,7 @@ class SettingsManager:
         print "Reading settings"
         # Parse config file.
         config = RawConfigParser(allow_no_value=True)
-        if os.path.exists(SettingsManager._CONFIG_PATH):
+        if exists(SettingsManager._CONFIG_PATH):
             config.read(SettingsManager._CONFIG_PATH)
 
         # Make sure the required values are set.
@@ -149,21 +136,40 @@ class SettingsManager:
 
             self.__settings[key] = setting.converter(val)
 
-    def create_connector(self):
-        connector = SettingsConnector(self)
-        self.__connectors.append(connector)
-        return connector
+    def add_on_update_listener(self, callback):
+        try:
+            self.__listener_lock.acquire()
+            self.__listeners.append(callback)
+        finally:
+            self.__listener_lock.release()
+
+    def get_settings(self):
+        """ Get a copy of all settings.
+        """
+        try:
+            self.__settings_lock.acquire()
+            return self.__settings.copy()
+        finally:
+            self.__settings_lock.release()
 
     def get_setting(self, key):
         """ Get a setting value.
         - key   : the key of the setting
         """
-        return self.__settings[key]
+        try:
+            self.__settings_lock.acquire()
+            return self.__settings[key]
+        finally:
+            self.__settings_lock.release()
 
     def set_setting(self, key, value):
         """ Set a setting value.
         - key   : the key of the setting
         - value : the value of the setting
         """
-        self.__settings[key] = value
-        self.__notify_connectors()
+        try:
+            self.__settings_lock.acquire()
+            self.__settings[key] = value
+            self.__notify_listeners()
+        finally:
+            self.__settings_lock.release()

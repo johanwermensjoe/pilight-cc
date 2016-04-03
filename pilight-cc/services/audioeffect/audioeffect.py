@@ -24,7 +24,7 @@ class AudioEffectService(BaseService):
     def __init__(self):
         """ Constructor
         """
-        self.state.set_value(AudioEffectService.StateValue.OK)
+        self._state.set_value(AudioEffectService.StateValue.OK)
         self.__hyperion_connector = None
         self.__delay_timer = DelayTimer(1 / self.__frame_rate)
 

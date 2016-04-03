@@ -49,6 +49,9 @@ class ServiceManager(object):
         self.__create_service(ServiceId.CAPTURE)
         self.__create_service(ServiceId.AUDIO_EFFECT)
 
+        # Update settings.
+        self.get_service(ServiceId.CAPTURE).update_settings(self.settings_manager.)
+
         # Enable initially.
         self.get_service(ServiceId.CAPTURE).enable(True)
 

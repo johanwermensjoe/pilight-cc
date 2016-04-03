@@ -17,6 +17,7 @@ class BaseService(object):
     Subclasses should implement _run_service and _load_settings.
     Implementations for _init_service, _on_shutdown
     and _handle_message are optional.
+    State codes 0-5 are reserved for BaseService.
     """
 
     # The delay interval for shutdown monitoring, safe delays.
@@ -26,10 +27,10 @@ class BaseService(object):
         """ Constructor
         - port      : the 0mq communication port
         """
-        self.state = State()
         self.__require_settings = enable_settings
-        self.__enabled = False
+        self.__enable = False
         self.__shutdown = False
+        self._update_state()
 
         # Setup the 0mq channel.
         context = Context()
@@ -38,10 +39,12 @@ class BaseService(object):
 
     def __handle_std_message(self, msg):
         if msg.type == ServiceMessage.Type.ENABLE:
-            self.__enabled = msg.data
+            self.__enable = msg.data
+            self._update_state()
         elif msg.type == ServiceMessage.Type.KILL:
-            self._on_shutdown()
             self.__shutdown = True
+            self._update_state()
+            self._on_shutdown()
         elif msg.type == ServiceMessage.Type.SETTINGS:
             self._load_settings(msg.data)
         else:
@@ -51,11 +54,13 @@ class BaseService(object):
         """ Service execution method.
         Should not be overridden.
         """
-        # With for initial settings if needed.
+        # Wait for initial settings if required.
         if self.__require_settings:
-            start_msg = ServiceMessage.wait_for_message(self.__socket,
-                                                        ServiceMessage.Type.SETTINGS)
-            self._load_settings(start_msg.data)
+            while not self.__shutdown:
+                start_msg = ServiceMessage.wait_for_message(self.__socket)
+                self._handle_message(start_msg)
+                if start_msg.type == ServiceMessage.Type.SETTINGS:
+                    break
 
         # Run initialization.
         self._init_service()
@@ -63,7 +68,7 @@ class BaseService(object):
         # Main loop, exit on leave.
         while not self.__shutdown:
             # Check for any incoming messages, wait if disabled.
-            if self.__enabled:
+            if self.__enable:
                 # Run service.
                 self._run_service()
                 msg = ServiceMessage.check_for_message(self.__socket)
@@ -108,13 +113,14 @@ class BaseService(object):
         raise NotImplementedError("Please implement this method")
 
     def _send_message(self, msg):
-        msg.send(self.__socket)
+        msg.sen(self.__socket)
 
-    def _update_state(self, value, msg=None):
-        self.state.set_value(value)
-        self.state.set_message(msg)
+    def _update_state(self, value=None, msg=None):
+        # Use previous value if none was given.
+        self._state = State(self.__enable, self.__shutdown,
+                            value if value else self._state.get_value(), msg)
         self._send_message(ServiceMessage(ServiceMessage.Type.STATE,
-                                          self.state))
+                                          self._state))
 
     def _safe_delay(self, delay):
         while delay > BaseService.__SAFE_DELAY_INCREMENT:
@@ -145,7 +151,7 @@ class ServiceConnector(object):
 
         # Setup state access.
         self.__state_lock = Lock()
-        self.__state = State()
+        self.__state = State(False, False)
 
         # Spawn a monitor thread.
         if spawn_monitor:
@@ -154,7 +160,7 @@ class ServiceConnector(object):
     def __monitor_state(self):
         while True:
             msg = ServiceMessage.wait_for_message(self.__socket,
-                                            ServiceMessage.Type.STATE)
+                                                  ServiceMessage.Type.STATE)
             self.__update_state(msg.data)
 
     def __update_state(self, data):
@@ -234,25 +240,38 @@ class ServiceMessage(object):
 
 
 class State(object):
-    def __init__(self, value=None, msg=None):
+    def __init__(self, enable, shutdown, value=None, msg=None):
         """ Constructor """
+        self.__enable = enable
+        self.__shutdown = shutdown
         self.__value = value
         self.__msg = msg
 
+    def is_enabled(self):
+        """ Getter for service enable state. """
+        return self.__enable
+
+    def is_shutting_down(self):
+        """ Getter for service shutdown state. """
+        return self.__shutdown
+
     def get_value(self):
-        """ Getter for state value. """
+        """ Getter for service state value. """
         return self.__value
 
     def get_message(self):
-        """ Getter for state message. """
+        """ Getter for service state message. """
         return self.__msg
 
     def to_data(self):
-        return {'value': self.__value, 'msg': self.__msg}
+        return {
+            'service': {'enable': self.__enable, 'shutdown': self.__shutdown},
+            'value': self.__value, 'msg': self.__msg}
 
     @classmethod
     def from_data(cls, data):
-        return cls(data['value'], data['msg'])
+        return cls(data['service']['enable'], data['service']['shutdown'],
+                   data['value'], data['msg'])
 
 
 class DelayTimer(object):
