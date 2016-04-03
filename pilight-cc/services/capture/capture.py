@@ -1,5 +1,6 @@
 """ Screen capture service module. """
 
+# Screen capture (Gtk).
 import gi
 
 gi.require_version('Gdk', '3.0')
@@ -7,6 +8,7 @@ from gi.repository import Gdk
 from gi.repository import GdkPixbuf
 
 # Service
+from services.service import ServiceLauncher
 from services.service import BaseService
 from services.service import DelayTimer
 
@@ -30,12 +32,35 @@ class CaptureService(BaseService):
 
     __ERROR_DELAY = 5
 
-    def __init__(self):
+    def __init__(self, port):
         """ Constructor
         """
-        self._state.set_value(CaptureService.StateValue.OK)
+        super(CaptureService, self).__init__(port, True)
+        self._update_state(CaptureService.StateValue.OK)
+        self.__delay_timer = DelayTimer()
+        self.__disconnect()
+
+        # Register settings.
+        self._register_settings([
+            ('__ip_address', Setting.HYPERION_IP_ADDRESS),
+            ('__port', Setting.HYPERION_PORT)
+        ], self.__disconnect)
+
+        self._register_settings([
+            ('__frame_rate', Setting.CAPTURE_FRAME_RATE),
+        ], self.__update_timer)
+
+        self._register_settings([
+            ('__scale_width', Setting.CAPTURE_SCALE_WIDTH),
+            ('__scale_height', Setting.CAPTURE_SCALE_HEIGHT),
+            ('__priority', Setting.CAPTURE_PRIORITY)
+        ])
+
+    def __disconnect(self):
         self.__hyperion_connector = None
-        self.__delay_timer = DelayTimer(1 / self.__frame_rate)
+
+    def __update_timer(self):
+        self.__delay_timer.set_delay(1 / self.__frame_rate)
 
     def __update_pixel_buffer(self):
         self.__data = self.scale_pixel_buffer(
@@ -101,5 +126,4 @@ class CaptureService(BaseService):
 
 
 if __name__ == '__main__':
-    capture_service = CaptureService()
-    capture_service.run()
+    ServiceLauncher.parse_args_and_execute("Capture", CaptureService)

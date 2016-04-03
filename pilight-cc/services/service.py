@@ -8,17 +8,41 @@ from threading import Lock
 from time import sleep, clock
 
 # Communication
-import zmq
+from zmq import PAIR
 from zmq import Context
+
+# Initialization
+from argparse import ArgumentParser
 
 
 class BaseService(object):
-    """ Base Service class.
-    Subclasses should implement _run_service and _load_settings.
-    Implementations for _init_service, _on_shutdown
-    and _handle_message are optional.
+    """ BaseService class.
+    Subclasses should implement _run_service.
+    Implementations for _on_shutdown and _handle_message are optional.
     State codes 0-5 are reserved for BaseService.
     """
+
+    class __SettingUnit(object):
+        def __init__(self, owner, id_key_pairs, callback=None):
+            self.__owner = owner
+            self.__id_key_pairs = id_key_pairs
+            self.__callback = callback
+
+        def init(self):
+            for (prop, _) in self.__id_key_pairs:
+                self.__owner.set_attr(prop, None)
+
+        def has_changes(self, settings):
+            for (prop, key) in self.__id_key_pairs:
+                if self.__owner.get_attr(prop) != settings[key]:
+                    return True
+            return False
+
+        def update(self, settings):
+            for (prop, key) in self.__id_key_pairs:
+                self.__owner.set_attr(prop, settings[key])
+            if self.__callback:
+                self.__callback()
 
     # The delay interval for shutdown monitoring, safe delays.
     __SAFE_DELAY_INCREMENT = 0.5
@@ -27,15 +51,25 @@ class BaseService(object):
         """ Constructor
         - port      : the 0mq communication port
         """
+        # Setup the 0mq channel.
+        self.__context = Context()
+        self.__socket = self.__context.socket(PAIR)
+        print "Address: tcp://127.0.0.1:{0}".format(port)
+        self.__socket.connect("tcp://127.0.0.1:{0}".format(port))
+
+        # Initialize state.
         self.__require_settings = enable_settings
         self.__enable = False
         self.__shutdown = False
         self._update_state()
 
-        # Setup the 0mq channel.
-        context = Context()
-        self.__socket = context.socket(zmq.PAIR)
-        self.__socket.bind("tcp://*:%s" % port)
+        # Setup setting handling.
+        self.__setting_units = []
+
+    def __load_settings(self, settings):
+        for setting_unit in self.__setting_units:
+            if setting_unit.has_changes(settings):
+                setting_unit.update(settings)
 
     def __handle_std_message(self, msg):
         if msg.type == ServiceMessage.Type.ENABLE:
@@ -46,7 +80,7 @@ class BaseService(object):
             self._update_state()
             self._on_shutdown()
         elif msg.type == ServiceMessage.Type.SETTINGS:
-            self._load_settings(msg.data)
+            self.__load_settings(msg.data)
         else:
             self._handle_message(msg)
 
@@ -62,9 +96,6 @@ class BaseService(object):
                 if start_msg.type == ServiceMessage.Type.SETTINGS:
                     break
 
-        # Run initialization.
-        self._init_service()
-
         # Main loop, exit on leave.
         while not self.__shutdown:
             # Check for any incoming messages, wait if disabled.
@@ -77,12 +108,6 @@ class BaseService(object):
 
             if msg:
                 self.__handle_std_message(msg)
-
-    def _init_service(self):
-        """ Can be implemented by subclass.
-        Called initially by the process before the first call to _run_service.
-        """
-        pass
 
     def _on_shutdown(self):
         """ To be implemented by subclass.
@@ -104,23 +129,24 @@ class BaseService(object):
         """
         raise NotImplementedError("Please implement this method")
 
-    def _load_settings(self, settings):
-        """ To be implemented by subclass.
-        Called periodically by the process if some setting has been changed.
-        Responsible for caching any setting needed during execution.
-        - settings    : the updated settings
-        """
-        raise NotImplementedError("Please implement this method")
+    def _register_settings(self, id_key_pairs, callback=None):
+        self.__setting_units.append(
+            BaseService.__SettingUnit(self, id_key_pairs, callback))
 
     def _send_message(self, msg):
-        msg.sen(self.__socket)
+        msg.send(self.__socket)
 
     def _update_state(self, value=None, msg=None):
         # Use previous value if none was given.
-        self._state = State(self.__enable, self.__shutdown,
-                            value if value else self._state.get_value(), msg)
+        if not value:
+            try:
+                value = self._state.get_value()
+            except AttributeError:
+                pass
+
+        self._state = ServiceState(self.__enable, self.__shutdown, value, msg)
         self._send_message(ServiceMessage(ServiceMessage.Type.STATE,
-                                          self._state))
+                                          self._state.to_data()))
 
     def _safe_delay(self, delay):
         while delay > BaseService.__SAFE_DELAY_INCREMENT:
@@ -137,21 +163,37 @@ class BaseService(object):
         sleep(delay)
 
 
-class ServiceConnector(object):
-    __HOST_ADDRESS = "127.0.0.1"
-    __MAX_TRIES = 100
+class ServiceLauncher(object):
+    """ Service launcher class.
+    """
 
-    def __init__(self, min_port, max_port, spawn_monitor=False):
+    @classmethod
+    def parse_args_and_execute(cls, name, service):
+        """ Parses arguments. """
+        parser = ArgumentParser(description="The " + name + " service.")
+        parser.add_argument('--port', type=int, required=True,
+                            help="communication port")
+        args = parser.parse_args()
+
+        service(args.port).run()
+
+
+class ServiceConnector(object):
+    """ Service connector class.
+    """
+
+    __HOST_ADDRESS = "tcp://127.0.0.1"
+
+    def __init__(self, spawn_monitor=False):
         # Setup the 0mq channel to the started service.
         context = Context()
-        self.__socket = context.socket(zmq.PAIR)
+        self.__socket = context.socket(PAIR)
         self.__port = self.__socket.bind_to_random_port(
-            ServiceConnector.__HOST_ADDRESS, min_port, max_port,
-            ServiceConnector.__MAX_TRIES)
+            ServiceConnector.__HOST_ADDRESS)
 
         # Setup state access.
         self.__state_lock = Lock()
-        self.__state = State(False, False)
+        self.__state = ServiceState(False, False)
 
         # Spawn a monitor thread.
         if spawn_monitor:
@@ -166,7 +208,7 @@ class ServiceConnector(object):
     def __update_state(self, data):
         try:
             self.__state_lock.acquire()
-            self.__state = State.from_data(data)
+            self.__state = ServiceState.from_data(data)
         finally:
             self.__state_lock.release()
 
@@ -204,6 +246,9 @@ class ServiceConnector(object):
 
 
 class ServiceMessage(object):
+    """ Service message class.
+    """
+
     class Type(object):
         ENABLE = 0
         KILL = 1
@@ -239,7 +284,10 @@ class ServiceMessage(object):
             return None
 
 
-class State(object):
+class ServiceState(object):
+    """ Service state class.
+    """
+
     def __init__(self, enable, shutdown, value=None, msg=None):
         """ Constructor """
         self.__enable = enable
@@ -279,12 +327,16 @@ class DelayTimer(object):
     Provides a real time delay that depends on the time of the last delay.
     """
 
-    def __init__(self, delay):
+    def __init__(self, delay=0):
         """ Constructor
         - delay : delay between calls in seconds
         """
         self.__delay = delay
         self.__last_time = 0
+
+    def set_delay(self, delay):
+        """ Setter for the delay. """
+        self.__delay = delay
 
     def start(self):
         """ Set the start of the execution of the caller process.

@@ -1,12 +1,16 @@
 """ Service Manager module. """
 
-from subprocess import call
+# Processes
+from subprocess import Popen
 
+# Services
+from os.path import abspath
+from capture import capture
+from audioeffect import audioeffect
 from services.service import ServiceConnector
 
+# Settings
 from settings.settings import SettingsManager
-
-from os.path import abspath, dirname, join
 
 
 class ServiceId(object):
@@ -20,46 +24,48 @@ class ServiceManager(object):
     """
 
     __SERVICE_PATH = {
-        ServiceId.CAPTURE: join(abspath(dirname(__file__)), "services",
-                                "capture", "capture.py"),
-        ServiceId.AUDIO_EFFECT: join(abspath(dirname(__file__)), "services",
-                                     "audioeffect", "audioeffect.py")
+        ServiceId.CAPTURE: abspath(capture.__file__).rstrip('c'),
+        ServiceId.AUDIO_EFFECT: abspath(audioeffect.__file__).rstrip('c')
     }
-
-    __MIN_PORT = 40000
-    __MAX_PORT = 50000
 
     def __init__(self):
         """ Constructor """
         # Init the settings.
+        print abspath(capture.__file__).rstrip('c')
+        print abspath(audioeffect.__file__).rstrip('c')
+        print " ".join(
+            ["python", ServiceManager.__SERVICE_PATH[ServiceId.CAPTURE],
+             str(40456)])
         self.settings_manager = SettingsManager()
-        self.__services = {}
+        self.__service_connectors = {}
 
     def __create_service(self, service_id):
         # Start the service.
-        connector = ServiceConnector(ServiceManager.__MIN_PORT,
-                                     ServiceManager.__MAX_PORT, True)
-        self.__services[service_id] = connector
-        call(["python", ServiceManager.__SERVICE_PATH[service_id],
-              connector.get_port()])
-        return ServiceConnector(connector)
+        connector = ServiceConnector(True)
+        self.__service_connectors[service_id] = connector
+        Popen(["python", ServiceManager.__SERVICE_PATH[service_id], "--port",
+               str(connector.get_port())])
 
     def start(self):
         """ Start services. """
+        # Create services.
         self.__create_service(ServiceId.CAPTURE)
         self.__create_service(ServiceId.AUDIO_EFFECT)
 
         # Update settings.
-        self.get_service(ServiceId.CAPTURE).update_settings(self.settings_manager.)
+        self.get_service(ServiceId.CAPTURE).update_settings(
+            self.settings_manager.get_settings())
+        self.get_service(ServiceId.AUDIO_EFFECT).update_settings(
+            self.settings_manager.get_settings())
 
-        # Enable initially.
+        # Enable services.
         self.get_service(ServiceId.CAPTURE).enable(True)
 
     def shutdown(self):
         """ Shutdown services and save settings. """
         # Shutdown services.
-        for service in self.__services:
-            service.shutdown()
+        for service_connector in self.__service_connectors.itervalues():
+            service_connector.shutdown()
 
         # Save all settings to storage.
         self.settings_manager.save_settings()
@@ -68,4 +74,4 @@ class ServiceManager(object):
         """ Getter for service connectors.
         - id    : the service id
         """
-        return self.__services[service_id]
+        return self.__service_connectors[service_id]

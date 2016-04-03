@@ -18,6 +18,7 @@ def exit_app(a, b):
 
 if __name__ == '__main__':
     service_manager = ServiceManager()
+    service_manager.start()
 
     builder = Gtk.Builder()
     builder.add_from_file("../res/pilightcc.glade")

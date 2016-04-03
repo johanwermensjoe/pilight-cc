@@ -1,9 +1,13 @@
 """ Audio Effect service module. """
 
-from hyperion.hyperion import HyperionConnector
-from hyperion.hyperion import HyperionError
+# Service
+from services.service import ServiceLauncher
 from services.service import BaseService
 from services.service import DelayTimer
+
+# Application
+from hyperion.hyperion import HyperionConnector
+from hyperion.hyperion import HyperionError
 from settings.settings import Setting
 
 
@@ -21,12 +25,33 @@ class AudioEffectService(BaseService):
 
     __ERROR_DELAY = 5
 
-    def __init__(self):
+    def __init__(self, port):
         """ Constructor
         """
-        self._state.set_value(AudioEffectService.StateValue.OK)
+        super(AudioEffectService, self).__init__(port, True)
+        self._update_state(AudioEffectService.StateValue.OK)
+        self.__delay_timer = DelayTimer()
+        self.__disconnect()
+
+        # Register settings.
+        self._register_settings([
+            ('__ip_address', Setting.HYPERION_IP_ADDRESS),
+            ('__port', Setting.HYPERION_PORT)
+        ], self.__disconnect)
+
+        self._register_settings([
+            ('__frame_rate', Setting.AUDIO_EFFECT_FRAME_RATE),
+        ], self.__update_timer)
+
+        self._register_settings([
+            ('__priority', Setting.AUDIO_EFFECT_PRIORITY),
+        ])
+
+    def __disconnect(self):
         self.__hyperion_connector = None
-        self.__delay_timer = DelayTimer(1 / self.__frame_rate)
+
+    def __update_timer(self):
+        self.__delay_timer.set_delay(1 / self.__frame_rate)
 
     def _run_service(self):
         self.__delay_timer.start()
@@ -56,13 +81,6 @@ class AudioEffectService(BaseService):
         # Wait until next run.
         self.__delay_timer.delay()
 
-    def _load_settings(self, settings_connector):
-        # Load the settings.
-        self.__priority = settings_connector.get_setting(
-            Setting.AUDIO_EFFECT_PRIORITY)
-        self.__frame_rate = settings_connector.get_setting(
-            Setting.AUDIO_EFFECT_FRAME_RATE)
-
     @staticmethod
     def read_audio():
         pass
@@ -73,5 +91,4 @@ class AudioEffectService(BaseService):
 
 
 if __name__ == '__main__':
-    audio_effect_service = AudioEffectService()
-    audio_effect_service.run()
+    ServiceLauncher.parse_args_and_execute("AudioEffect", AudioEffectService)

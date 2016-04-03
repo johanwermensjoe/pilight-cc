@@ -12,6 +12,8 @@ from ConfigParser import NoSectionError
 
 
 class Setting(object):
+    """ Setting identifier class.
+    """
     CAPTURE_SCALE_WIDTH = 'cWidth'
     CAPTURE_SCALE_HEIGHT = 'cHeight'
     CAPTURE_PRIORITY = 'cPriority'
@@ -80,12 +82,12 @@ class SettingsManager:
         self.__listeners = []
 
     def __notify_listeners(self):
-        """ Notifies the connectors that some setting has changed.
+        """ Notifies the listeners that some setting has changed.
         """
         try:
             self.__listener_lock.acquire()
-            for c in self.__listeners:
-                c(self.get_settings())
+            for listener in self.__listeners:
+                listener(self.get_settings())
         finally:
             self.__listener_lock.release()
 
@@ -137,6 +139,9 @@ class SettingsManager:
             self.__settings[key] = setting.converter(val)
 
     def add_on_update_listener(self, callback):
+        """ Registers an settings update listener.
+        - callback  : the callback function (should take settings as argument)
+        """
         try:
             self.__listener_lock.acquire()
             self.__listeners.append(callback)
