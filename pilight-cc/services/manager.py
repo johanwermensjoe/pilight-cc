@@ -31,11 +31,6 @@ class ServiceManager(object):
     def __init__(self):
         """ Constructor """
         # Init the settings.
-        print abspath(capture.__file__).rstrip('c')
-        print abspath(audioeffect.__file__).rstrip('c')
-        print " ".join(
-            ["python", ServiceManager.__SERVICE_PATH[ServiceId.CAPTURE],
-             str(40456)])
         self.settings_manager = SettingsManager()
         self.__service_connectors = {}
 
@@ -50,13 +45,13 @@ class ServiceManager(object):
         """ Start services. """
         # Create services.
         self.__create_service(ServiceId.CAPTURE)
-        self.__create_service(ServiceId.AUDIO_EFFECT)
+        # self.__create_service(ServiceId.AUDIO_EFFECT)
 
         # Update settings.
         self.get_service(ServiceId.CAPTURE).update_settings(
             self.settings_manager.get_settings())
-        self.get_service(ServiceId.AUDIO_EFFECT).update_settings(
-            self.settings_manager.get_settings())
+        # self.get_service(ServiceId.AUDIO_EFFECT).update_settings(
+        #     self.settings_manager.get_settings())
 
         # Enable services.
         self.get_service(ServiceId.CAPTURE).enable(True)
@@ -72,6 +67,6 @@ class ServiceManager(object):
 
     def get_service(self, service_id):
         """ Getter for service connectors.
-        - id    : the service id
+        - service_id    : the service id
         """
         return self.__service_connectors[service_id]

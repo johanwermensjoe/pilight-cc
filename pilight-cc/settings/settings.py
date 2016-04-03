@@ -77,7 +77,6 @@ class SettingsManager:
         self.__settings_lock = RLock()
         self.__listener_lock = Lock()
 
-        self.__settings = {}
         self.__read_settings()
         self.__listeners = []
 

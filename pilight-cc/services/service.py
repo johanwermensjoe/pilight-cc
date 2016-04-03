@@ -9,6 +9,8 @@ from time import sleep, clock
 
 # Communication
 from zmq import PAIR
+from zmq import NOBLOCK
+from zmq import ZMQError
 from zmq import Context
 
 # Initialization
@@ -30,17 +32,17 @@ class BaseService(object):
 
         def init(self):
             for (prop, _) in self.__id_key_pairs:
-                self.__owner.set_attr(prop, None)
+                setattr(self.__owner, prop, None)
 
         def has_changes(self, settings):
             for (prop, key) in self.__id_key_pairs:
-                if self.__owner.get_attr(prop) != settings[key]:
+                if getattr(self.__owner, prop) != settings[key]:
                     return True
             return False
 
         def update(self, settings):
             for (prop, key) in self.__id_key_pairs:
-                self.__owner.set_attr(prop, settings[key])
+                setattr(self.__owner, prop, settings[key])
             if self.__callback:
                 self.__callback()
 
@@ -54,7 +56,7 @@ class BaseService(object):
         # Setup the 0mq channel.
         self.__context = Context()
         self.__socket = self.__context.socket(PAIR)
-        print "Address: tcp://127.0.0.1:{0}".format(port)
+        print "Service started on: tcp://127.0.0.1:{0}".format(port)
         self.__socket.connect("tcp://127.0.0.1:{0}".format(port))
 
         # Initialize state.
@@ -72,6 +74,7 @@ class BaseService(object):
                 setting_unit.update(settings)
 
     def __handle_std_message(self, msg):
+        print "Message received: {0} - {1}".format(msg.type, msg.data)
         if msg.type == ServiceMessage.Type.ENABLE:
             self.__enable = msg.data
             self._update_state()
@@ -91,8 +94,9 @@ class BaseService(object):
         # Wait for initial settings if required.
         if self.__require_settings:
             while not self.__shutdown:
+                print "Waiting for initial settings"
                 start_msg = ServiceMessage.wait_for_message(self.__socket)
-                self._handle_message(start_msg)
+                self.__handle_std_message(start_msg)
                 if start_msg.type == ServiceMessage.Type.SETTINGS:
                     break
 
@@ -130,8 +134,9 @@ class BaseService(object):
         raise NotImplementedError("Please implement this method")
 
     def _register_settings(self, id_key_pairs, callback=None):
-        self.__setting_units.append(
-            BaseService.__SettingUnit(self, id_key_pairs, callback))
+        setting_unit = BaseService.__SettingUnit(self, id_key_pairs, callback)
+        setting_unit.init()
+        self.__setting_units.append(setting_unit)
 
     def _send_message(self, msg):
         msg.send(self.__socket)
@@ -145,6 +150,8 @@ class BaseService(object):
                 pass
 
         self._state = ServiceState(self.__enable, self.__shutdown, value, msg)
+        print "State updated: {0} - {1}".format(self._state.get_value(),
+                                                self._state.get_message())
         self._send_message(ServiceMessage(ServiceMessage.Type.STATE,
                                           self._state.to_data()))
 
@@ -176,6 +183,7 @@ class ServiceLauncher(object):
         args = parser.parse_args()
 
         service(args.port).run()
+        print "Service finished"
 
 
 class ServiceConnector(object):
@@ -197,7 +205,9 @@ class ServiceConnector(object):
 
         # Spawn a monitor thread.
         if spawn_monitor:
-            Thread(target=self.__monitor_state).start()
+            thread = Thread(target=self.__monitor_state)
+            thread.daemon = True
+            thread.start()
 
     def __monitor_state(self):
         while True:
@@ -209,6 +219,8 @@ class ServiceConnector(object):
         try:
             self.__state_lock.acquire()
             self.__state = ServiceState.from_data(data)
+            print "State received: {0} - {1}".format(self.__state.get_value(),
+                                                    self.__state.get_message())
         finally:
             self.__state_lock.release()
 
@@ -272,15 +284,18 @@ class ServiceMessage(object):
     @classmethod
     def wait_for_message(cls, zmq_socket, _type=None):
         while True:
+            print "Waiting for message of type=" + str(_type)
             service_message = cls.from_message(zmq_socket.recv_json())
-            if _type and service_message.type == _type:
+            print "Type " + str(service_message.type) + " received"
+            # Return message if the _type isn't requested or matches.
+            if not _type or service_message.type == _type:
                 return service_message
 
     @classmethod
     def check_for_message(cls, zmq_socket):
         try:
-            return cls.from_message(zmq_socket.recv_json(), zmq.DONTWAIT)
-        except zmq.NotDone:
+            return cls.from_message(zmq_socket.recv_json(NOBLOCK))
+        except ZMQError:
             return None
 
 
