@@ -71,7 +71,6 @@ class CaptureService(BaseService):
         # Check that an hyperion connection is available.
         if not self.__hyperion_connector:
             try:
-                self.__update_pixel_buffer()
                 self.__hyperion_connector = HyperionConnector(self._ip_address,
                                                               self._port)
                 self._update_state(CaptureService.StateValue.OK)
@@ -82,6 +81,7 @@ class CaptureService(BaseService):
 
         try:
             # Capture and pass to hyperion service.
+            self.__update_pixel_buffer()
             self.__hyperion_connector.send_image(self._scale_width,
                                                  self._scale_height,
                                                  self.__data.get_pixels(),

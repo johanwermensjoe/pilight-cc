@@ -77,6 +77,10 @@ class BaseService(object):
             if setting_unit.has_changes(settings):
                 setting_unit.update(settings)
 
+    def __del__(self):
+        self.__socket.close()
+        self.__context.destroy()
+
     def __handle_std_message(self, msg):
         """ Handle standard message types.
         - msg   : the message (None is allowed)
@@ -157,8 +161,7 @@ class BaseService(object):
                 pass
         # Only update if new state is different.
         new_state = ServiceState(self.__enable, self.__shutdown, value, msg)
-        print "State updated: {0} - {1}".format(new_state.get_value(),
-                                                new_state.get_message())
+        print "State updated: {0}".format(new_state)
         if self._state != new_state:
             self._state = new_state
             self._send_message(ServiceMessage(ServiceMessage.Type.STATE,
@@ -183,8 +186,8 @@ class ServiceLauncher(object):
     """ Service launcher class.
     """
 
-    @classmethod
-    def parse_args_and_execute(cls, name, service):
+    @staticmethod
+    def parse_args_and_execute(name, service):
         """ Parses arguments. """
         parser = ArgumentParser(description="The " + name + " service.")
         parser.add_argument('--port', type=int, required=True,
@@ -204,8 +207,8 @@ class ServiceConnector(object):
 
     def __init__(self, spawn_monitor=False):
         # Setup the 0mq channel to the started service.
-        context = Context()
-        self.__socket = context.socket(PAIR)
+        self.__context = Context()
+        self.__socket = self.__context.socket(PAIR)
         self.__port = self.__socket.bind_to_random_port(
             ServiceConnector.__HOST_ADDRESS)
 
@@ -219,6 +222,10 @@ class ServiceConnector(object):
             thread.daemon = True
             thread.start()
 
+    def __del__(self):
+        self.__socket.close()
+        self.__context.destroy()
+
     def __monitor_state(self):
         while True:
             msg = ServiceMessage.wait_for_message(self.__socket,
@@ -229,8 +236,7 @@ class ServiceConnector(object):
         try:
             self.__state_lock.acquire()
             self.__state = ServiceState.from_data(data)
-            print "State received: {0} - {1}".format(self.__state.get_value(),
-                                                     self.__state.get_message())
+            print "State received: {0}".format(self.__state)
         finally:
             self.__state_lock.release()
 
@@ -328,6 +334,16 @@ class ServiceState(object):
 
     def __ne__(self, other):
         return not self == other
+
+    def __str__(self):
+        state_str = " State: Not set"
+        if self.__value:
+            state_str = " State: value={0}".format(self.__value)
+            if self.__msg:
+                state_str += " msg={0}".format(self.__msg)
+        return "Service [enable={0} shutdown={1}{2}]".format(self.__enable,
+                                                             self.__shutdown,
+                                                             state_str)
 
     def is_enabled(self):
         """ Getter for service enable state. """
