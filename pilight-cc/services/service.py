@@ -25,14 +25,14 @@ class BaseService(object):
     """
 
     class __SettingUnit(object):
-        def __init__(self, owner, id_key_pairs, callback=None):
+        def __init__(self, owner, callback=None):
             self.__owner = owner
-            self.__id_key_pairs = id_key_pairs
             self.__callback = callback
+            self.__id_key_pairs = []
 
-        def init(self):
-            for (prop, _) in self.__id_key_pairs:
-                setattr(self.__owner, prop, None)
+        def add(self, id, key):
+            self.__id_key_pairs.append((id, key))
+            setattr(self.__owner, id, None)
 
         def has_changes(self, settings):
             for (prop, key) in self.__id_key_pairs:
@@ -63,6 +63,7 @@ class BaseService(object):
         self.__require_settings = enable_settings
         self.__enable = False
         self.__shutdown = False
+        self._state = None
         self._update_state()
 
         # Setup setting handling.
@@ -133,10 +134,10 @@ class BaseService(object):
         """
         raise NotImplementedError("Please implement this method")
 
-    def _register_settings(self, id_key_pairs, callback=None):
-        setting_unit = BaseService.__SettingUnit(self, id_key_pairs, callback)
-        setting_unit.init()
+    def _register_setting_unit(self, callback=None):
+        setting_unit = BaseService.__SettingUnit(self, callback)
         self.__setting_units.append(setting_unit)
+        return setting_unit
 
     def _send_message(self, msg):
         msg.send(self.__socket)
@@ -148,12 +149,14 @@ class BaseService(object):
                 value = self._state.get_value()
             except AttributeError:
                 pass
-
-        self._state = ServiceState(self.__enable, self.__shutdown, value, msg)
-        print "State updated: {0} - {1}".format(self._state.get_value(),
-                                                self._state.get_message())
-        self._send_message(ServiceMessage(ServiceMessage.Type.STATE,
-                                          self._state.to_data()))
+        # Only update if new state is different.
+        new_state = ServiceState(self.__enable, self.__shutdown, value, msg)
+        if self._state != new_state:
+            self._state = new_state
+            print "State updated: {0} - {1}".format(self._state.get_value(),
+                                                    self._state.get_message())
+            self._send_message(ServiceMessage(ServiceMessage.Type.STATE,
+                                              self._state.to_data()))
 
     def _safe_delay(self, delay):
         while delay > BaseService.__SAFE_DELAY_INCREMENT:
@@ -183,7 +186,7 @@ class ServiceLauncher(object):
         args = parser.parse_args()
 
         service(args.port).run()
-        print "Service finished"
+        print "Service terminated"
 
 
 class ServiceConnector(object):
@@ -220,7 +223,7 @@ class ServiceConnector(object):
             self.__state_lock.acquire()
             self.__state = ServiceState.from_data(data)
             print "State received: {0} - {1}".format(self.__state.get_value(),
-                                                    self.__state.get_message())
+                                                     self.__state.get_message())
         finally:
             self.__state_lock.release()
 
@@ -284,9 +287,7 @@ class ServiceMessage(object):
     @classmethod
     def wait_for_message(cls, zmq_socket, _type=None):
         while True:
-            print "Waiting for message of type=" + str(_type)
             service_message = cls.from_message(zmq_socket.recv_json())
-            print "Type " + str(service_message.type) + " received"
             # Return message if the _type isn't requested or matches.
             if not _type or service_message.type == _type:
                 return service_message
@@ -309,6 +310,17 @@ class ServiceState(object):
         self.__shutdown = shutdown
         self.__value = value
         self.__msg = msg
+
+    def __eq__(self, other):
+        if isinstance(other, ServiceState):
+            return self.__enable == other.__enable and \
+                   self.__shutdown == other.__shutdown and \
+                   self.__value == other.__value and \
+                   self.__msg == other.__msg
+        return NotImplemented
+
+    def __ne__(self, other):
+        return not self == other
 
     def is_enabled(self):
         """ Getter for service enable state. """

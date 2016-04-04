@@ -41,20 +41,17 @@ class CaptureService(BaseService):
         self.__disconnect()
 
         # Register settings.
-        self._register_settings([
-            ('_ip_address', Setting.HYPERION_IP_ADDRESS),
-            ('_port', Setting.HYPERION_PORT)
-        ], self.__disconnect)
+        hyperion_unit = self._register_setting_unit(self.__disconnect())
+        hyperion_unit.add('_ip_address', Setting.HYPERION_IP_ADDRESS)
+        hyperion_unit.add('_port', Setting.HYPERION_PORT)
 
-        self._register_settings([
-            ('_frame_rate', Setting.CAPTURE_FRAME_RATE),
-        ], self.__update_timer)
+        capture_unit = self._register_setting_unit(self.__update_timer)
+        capture_unit.add('_frame_rate', Setting.CAPTURE_FRAME_RATE)
 
-        self._register_settings([
-            ('_scale_width', Setting.CAPTURE_SCALE_WIDTH),
-            ('_scale_height', Setting.CAPTURE_SCALE_HEIGHT),
-            ('_priority', Setting.CAPTURE_PRIORITY)
-        ])
+        std_unit = self._register_setting_unit()
+        std_unit.add('_scale_width', Setting.CAPTURE_SCALE_WIDTH)
+        std_unit.add('_scale_height', Setting.CAPTURE_SCALE_HEIGHT)
+        std_unit.add('_priority', Setting.CAPTURE_PRIORITY)
 
     def __disconnect(self):
         self.__hyperion_connector = None

@@ -34,18 +34,15 @@ class AudioEffectService(BaseService):
         self.__disconnect()
 
         # Register settings.
-        self._register_settings([
-            ('__ip_address', Setting.HYPERION_IP_ADDRESS),
-            ('__port', Setting.HYPERION_PORT)
-        ], self.__disconnect)
+        hyperion_unit = self._register_setting_unit(self.__disconnect())
+        hyperion_unit.add('_ip_address', Setting.HYPERION_IP_ADDRESS)
+        hyperion_unit.add('_port', Setting.HYPERION_PORT)
 
-        self._register_settings([
-            ('__frame_rate', Setting.AUDIO_EFFECT_FRAME_RATE),
-        ], self.__update_timer)
+        audio_effect_unit = self._register_setting_unit(self.__update_timer)
+        audio_effect_unit.add('_frame_rate', Setting.AUDIO_EFFECT_FRAME_RATE)
 
-        self._register_settings([
-            ('__priority', Setting.AUDIO_EFFECT_PRIORITY),
-        ])
+        std_unit = self._register_setting_unit()
+        std_unit.add('_priority', Setting.AUDIO_EFFECT_PRIORITY)
 
     def __disconnect(self):
         self.__hyperion_connector = None
