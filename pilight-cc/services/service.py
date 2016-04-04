@@ -49,6 +49,8 @@ class BaseService(object):
     # The delay interval for shutdown monitoring, safe delays.
     __SAFE_DELAY_INCREMENT = 0.5
 
+    __HOST_ADDRESS = "tcp://127.0.0.1"
+
     def __init__(self, port, enable_settings=False):
         """ Constructor
         - port      : the 0mq communication port
@@ -57,7 +59,8 @@ class BaseService(object):
         self.__context = Context()
         self.__socket = self.__context.socket(PAIR)
         print "Service started on: tcp://127.0.0.1:{0}".format(port)
-        self.__socket.connect("tcp://127.0.0.1:{0}".format(port))
+        self.__socket.connect("{0}:{1}".format(BaseService.__HOST_ADDRESS,
+                                               port))
 
         # Initialize state.
         self.__require_settings = enable_settings
@@ -75,18 +78,22 @@ class BaseService(object):
                 setting_unit.update(settings)
 
     def __handle_std_message(self, msg):
-        print "Message received: {0} - {1}".format(msg.type, msg.data)
-        if msg.type == ServiceMessage.Type.ENABLE:
-            self.__enable = msg.data
-            self._update_state()
-        elif msg.type == ServiceMessage.Type.KILL:
-            self.__shutdown = True
-            self._update_state()
-            self._on_shutdown()
-        elif msg.type == ServiceMessage.Type.SETTINGS:
-            self.__load_settings(msg.data)
-        else:
-            self._handle_message(msg)
+        """ Handle standard message types.
+        - msg   : the message (None is allowed)
+        """
+        if msg:
+            print "Message received: {0} - {1}".format(msg.type, msg.data)
+            if msg.type == ServiceMessage.Type.ENABLE:
+                self.__enable = msg.data
+                self._update_state()
+            elif msg.type == ServiceMessage.Type.KILL:
+                self.__shutdown = True
+                self._update_state()
+                self._on_shutdown()
+            elif msg.type == ServiceMessage.Type.SETTINGS:
+                self.__load_settings(msg.data)
+            else:
+                self._handle_message(msg)
 
     def run(self):
         """ Service execution method.
@@ -111,8 +118,7 @@ class BaseService(object):
             else:
                 msg = ServiceMessage.wait_for_message(self.__socket)
 
-            if msg:
-                self.__handle_std_message(msg)
+            self.__handle_std_message(msg)
 
     def _on_shutdown(self):
         """ To be implemented by subclass.
@@ -151,10 +157,10 @@ class BaseService(object):
                 pass
         # Only update if new state is different.
         new_state = ServiceState(self.__enable, self.__shutdown, value, msg)
+        print "State updated: {0} - {1}".format(new_state.get_value(),
+                                                new_state.get_message())
         if self._state != new_state:
             self._state = new_state
-            print "State updated: {0} - {1}".format(self._state.get_value(),
-                                                    self._state.get_message())
             self._send_message(ServiceMessage(ServiceMessage.Type.STATE,
                                               self._state.to_data()))
 
@@ -166,7 +172,7 @@ class BaseService(object):
 
             # Check and handle any messages.
             msg = ServiceMessage.check_for_message(self.__socket)
-            self._handle_message(msg)
+            self.__handle_std_message(msg)
             if self.__shutdown:
                 return
         # Sleep for any remaining delay.
@@ -185,6 +191,7 @@ class ServiceLauncher(object):
                             help="communication port")
         args = parser.parse_args()
 
+        print "Service started"
         service(args.port).run()
         print "Service terminated"
 

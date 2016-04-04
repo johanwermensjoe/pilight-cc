@@ -12,7 +12,6 @@ def hello(button):
 
 def exit_app(a, b):
     service_manager.shutdown()
-    print "Shutdown"
     Gtk.main_quit()
 
 

@@ -45,23 +45,24 @@ class ServiceManager(object):
         """ Start services. """
         # Create services.
         self.__create_service(ServiceId.CAPTURE)
-        # self.__create_service(ServiceId.AUDIO_EFFECT)
+        self.__create_service(ServiceId.AUDIO_EFFECT)
 
         # Update settings.
         self.get_service(ServiceId.CAPTURE).update_settings(
             self.settings_manager.get_settings())
-        # self.get_service(ServiceId.AUDIO_EFFECT).update_settings(
-        #     self.settings_manager.get_settings())
+        self.get_service(ServiceId.AUDIO_EFFECT).update_settings(
+            self.settings_manager.get_settings())
 
         # Enable services.
         self.get_service(ServiceId.CAPTURE).enable(True)
+        # self.get_service(ServiceId.AUDIO_EFFECT).enable(True)
 
     def shutdown(self):
         """ Shutdown services and save settings. """
+        print "Shutting down services"
         # Shutdown services.
         for service_connector in self.__service_connectors.itervalues():
             service_connector.shutdown()
-
         # Save all settings to storage.
         self.settings_manager.save_settings()
 
