@@ -129,14 +129,13 @@ class SettingsManager:
         self.__settings = {}
         for key, setting in SettingsManager._CONF.iteritems():
             try:
-                val = config.get(setting.section, key)
+                value = config.get(setting.section, key)
             except (NoSectionError, NoOptionError):
-                val = None
-            if not val:
-                # Use default value instead.
-                val = setting.default
+                value = None
+            # Use default value instead.
+            value = setting.default if value is None else value
 
-            self.__settings[key] = setting.converter(val)
+            self.__settings[key] = setting.converter(value)
 
     def add_on_update_listener(self, callback):
         """ Registers an settings update listener.

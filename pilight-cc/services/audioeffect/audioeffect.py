@@ -48,13 +48,13 @@ class AudioEffectService(BaseService):
         self.__hyperion_connector = None
 
     def __update_timer(self):
-        self.__delay_timer.set_delay(1 / self._frame_rate)
+        self.__delay_timer.set_delay(1.0 / self._frame_rate)
 
     def _run_service(self):
         self.__delay_timer.start()
 
         # Check that an hyperion connection is available.
-        if not self.__hyperion_connector:
+        if self.__hyperion_connector is None:
             try:
                 self.__hyperion_connector = HyperionConnector(self._ip_address,
                                                               self._port)

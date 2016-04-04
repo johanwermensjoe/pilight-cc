@@ -43,7 +43,7 @@ class BaseService(object):
         def update(self, settings):
             for (prop, key) in self.__id_key_pairs:
                 setattr(self.__owner, prop, settings[key])
-            if self.__callback:
+            if self.__callback is not None:
                 self.__callback()
 
     # The delay interval for shutdown monitoring, safe delays.
@@ -85,7 +85,7 @@ class BaseService(object):
         """ Handle standard message types.
         - msg   : the message (None is allowed)
         """
-        if msg:
+        if msg is not None:
             print "Message received: {0} - {1}".format(msg.type, msg.data)
             if msg.type == ServiceMessage.Type.ENABLE:
                 self.__enable = msg.data
@@ -154,11 +154,10 @@ class BaseService(object):
 
     def _update_state(self, value=None, msg=None):
         # Use previous value if none was given.
-        if not value:
-            try:
-                value = self._state.get_value()
-            except AttributeError:
-                pass
+        try:
+            value = self._state.get_value() if value is None else value
+        except AttributeError:
+            pass
         # Only update if new state is different.
         new_state = ServiceState(self.__enable, self.__shutdown, value, msg)
         print "State updated: {0}".format(new_state)
@@ -302,7 +301,7 @@ class ServiceMessage(object):
         while True:
             service_message = cls.from_message(zmq_socket.recv_json())
             # Return message if the _type isn't requested or matches.
-            if not _type or service_message.type == _type:
+            if _type is None or service_message.type == _type:
                 return service_message
 
     @classmethod
@@ -337,9 +336,9 @@ class ServiceState(object):
 
     def __str__(self):
         state_str = " State: Not set"
-        if self.__value:
+        if self.__value is not None:
             state_str = " State: value={0}".format(self.__value)
-            if self.__msg:
+            if self.__msg is not None:
                 state_str += " msg={0}".format(self.__msg)
         return "Service [enable={0} shutdown={1}{2}]".format(self.__enable,
                                                              self.__shutdown,
