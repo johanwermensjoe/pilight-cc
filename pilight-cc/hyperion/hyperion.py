@@ -37,7 +37,7 @@ class HyperionConnector(object):
 
     def __del__(self):
         # Close the socket.
-        if self.__socket:
+        if self.__socket is not None:
             self.__socket.close()
 
     def __connect(self, ip_address, port):
