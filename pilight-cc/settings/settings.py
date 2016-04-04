@@ -64,7 +64,8 @@ class SettingsManager:
                                             int),
 
         Setting.AUDIO_EFFECT_SPOTIFY_ENABLE: _BaseSetting(False, _Section.AUDIO,
-                                                          False, bool),
+                                                          False, lambda s:
+                                                          s == 'True'),
         Setting.AUDIO_EFFECT_PRIORITY: _BaseSetting(800, _Section.AUDIO, False,
                                                     int),
         Setting.AUDIO_EFFECT_FRAME_RATE: _BaseSetting(60, _Section.AUDIO, False,
