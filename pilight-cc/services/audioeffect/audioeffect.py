@@ -64,7 +64,7 @@ class AudioEffectService(BaseService):
                 self._safe_delay(AudioEffectService.__ERROR_DELAY)
                 return
 
-        # Capture audio.
+        # Capture __audio.
         # TODO
         self.read_audio()
 

@@ -1,9 +1,9 @@
 """ Screen capture service module. """
 
-# Screen capture (Gtk).
-import gi
+# PyGI - Screen capture (Gtk).
+from gi import require_version
+require_version('Gdk', '3.0')
 
-gi.require_version('Gdk', '3.0')
 from gi.repository import Gdk
 from gi.repository import GdkPixbuf
 
