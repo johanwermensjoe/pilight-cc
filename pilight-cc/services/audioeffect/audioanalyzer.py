@@ -8,13 +8,15 @@ require_version('Gtk', '3.0')
 from gi.repository import Gst, Gtk, GObject
 
 from threading import Thread
+from sys import stdout
 
-PULSE_AUDIO_DEVICE = "alsa_output.pci-0000_00_1b.0.analog-stereo.monitor"
+# PULSE_AUDIO_DEVICE = "alsa_output.pci-0000_00_1b.0.analog-stereo.monitor"
+PULSE_AUDIO_DEVICE = "alsa_output.usb-Propellerhead_Balance_0001002008080-00.analog-stereo.monitor"
 
 
 class AudioAnalyser:
-
-    __SPECTRUM_MSG = "spectrum"
+    __SPECTRUM_NAME = "spectrum"
+    __SPECTRUM_MAGNITUDE = 'magnitude'
 
     def __init__(self, source, callback, **opts):
         """
@@ -113,6 +115,7 @@ class AudioAnalyser:
 
         self.__pipeline = Gst.Pipeline()
 
+        # Audio source.
         # self.__audio_source = Gst.ElementFactory.make("pulsesrc", "audio_source")
         # self.__audio_source.set_property("device", self.__source)
         self.__audio_source = Gst.ElementFactory.make('audiotestsrc',
@@ -120,14 +123,28 @@ class AudioAnalyser:
         self.__audio_source.set_property('freq', 1000)
         self.__pipeline.add(self.__audio_source)
 
+        self.__caps = Gst.caps_from_string(
+            'audio/x-raw, rate=(int){0}'.format(AUDIOFREQ))
+        self.__caps_filter = Gst.ElementFactory.make('capsfilter', "filter")
+        self.__caps_filter.set_property('caps', self.__caps)
+        self.__pipeline.add(self.__caps_filter)
+
+        # Spectrum analyser.
         self.__spectrum_analyser = Gst.ElementFactory.make('spectrum',
                                                            "spectrum_analyser")
         self.__spectrum_analyser.set_property('bands', self.__bands)
-        self.__spectrum_analyser.set_property('interval', self.__interval)
+        self.__spectrum_analyser.set_property('interval',
+                                              self.__interval * 1000000)
         self.__spectrum_analyser.set_property('threshold', self.__threshold)
-        self.__spectrum_analyser.set_property('multi-channel', self.__multichannel)
+        self.__spectrum_analyser.set_property('multi-channel',
+                                              self.__multichannel)
         self.__pipeline.add(self.__spectrum_analyser)
 
+        # Sink
+        self.__sink = Gst.ElementFactory.make('fakesink', "sink")
+        self.__pipeline.add(self.__sink)
+
+        # Messages.
         self.__bus = self.__pipeline.get_bus()
         self.__bus.add_signal_watch()
         self.__connections = [
@@ -136,7 +153,16 @@ class AudioAnalyser:
             self.__bus.connect('message::element', self.__on_message)
         ]
 
-        self.__audio_source.link(self.__spectrum_analyser)
+        # Link
+        # self.__audio_source.link(self.__spectrum_analyser)
+        # self.__caps = Gst.caps_from_string('audio/x-raw, rate=(int){0}'.format(AUDIOFREQ))
+        # self.__audio_source.link_filtered(self.__spectrum_analyser, self.__caps)
+        self.__audio_source.link(self.__caps_filter)
+        self.__caps_filter.link(self.__spectrum_analyser)
+        self.__spectrum_analyser.link(self.__sink)
+
+    def __del__(self):
+        self.stop()
 
     def start(self):
         self.__pipeline.set_state(Gst.State.PLAYING)
@@ -147,8 +173,15 @@ class AudioAnalyser:
         self.__pipeline.set_state(Gst.State.NULL)
 
     def __on_message(self, _, msg):
-        if msg.get_structure().get_name() == AudioAnalyser.__SPECTRUM_MSG:
-            print('spectrum msg')
+        msg_st = msg.get_structure()
+        if msg_st.get_name() == AudioAnalyser.__SPECTRUM_NAME and \
+                msg_st.has_field(AudioAnalyser.__SPECTRUM_MAGNITUDE):
+            if self.__multichannel:
+                # TODO
+                pass
+            else:
+                print msg.get_structure().to_string()
+                # self.__callback(msg.get_structure())
 
     def __on_eos(self, _):
         print("on_eos():")
@@ -156,115 +189,17 @@ class AudioAnalyser:
     def __on_error(self, _, msg):
         print("on_error():", msg.parse_error())
 
-        # def on_message(self, bus, message):
-        #     # We should return false if the pipeline has stopped
-        #     if not self.running:
-        #         return False
-        #
-        #     try:
-        #         # s = message.structure
-        #         s = message.get_structure()
-        #         if not s:
-        #             return
-        #         name = s.get_name()
-        #
-        #         if name == 'spectrum' and s.has_field('magnitude'):
-        #
-        #             # mags = s.get_value('magnitude')
-        #
-        #             # PyGI doesn't fully support spectrum yet: https://bugzilla.gnome.org/show_bug.cgi?id=693168
-        #
-        #             if self.multichannel:
-        #                 mags = self.parse_spectrum_structure(s.to_string())['magnitude']
-        #                 magnitudes = mags[0][
-        #                              :self.bands_cutoff]  # We use only the first channel for now
-        #             else:
-        #                 mags = self.parse_magnitude(s.to_string())
-        #                 magnitudes = mags[:self.bands_cutoff]
-        #
-        #             if not self.db:
-        #                 if self.logamplify:
-        #                     magnitudes = [self.dbtopct(db, i) for i, db
-        #                                   in enumerate(magnitudes)]
-        #                 else:
-        #                     magnitudes = [self.dbtopct(db) for i, db
-        #                                   in enumerate(magnitudes)]
-        #             if not self.raw:
-        #                 magnitudes = self.scale(magnitudes, self.bands)
-        #             magnitudes = [self.round(m) for m in magnitudes]
-        #         elif name == 'level' and s.has_field('peak') and s.has_field('decay'):
-        #             magnitudes = []
-        #             peaks = s.get_value('peak')
-        #             decays = s.get_value('decay')
-        #             for channel in range(0, min(self.bands, len(peaks))):
-        #                 peak = max(-self.threshold, min(0, peaks[channel]))
-        #                 decay = max(-self.threshold, min(0, decays[channel]))
-        #                 if not self.db:
-        #                     if self.logamplify:
-        #                         peak = self.dbtopct(peak, peak)
-        #                         decay = self.dbtopct(decay, decay)
-        #                     else:
-        #                         peak = self.dbtopct(peak)
-        #                         decay = self.dbtopct(decay)
-        #                 magnitudes.append(self.round(peak))
-        #                 magnitudes.append(self.round(decay))
-        #         else:
-        #             return True
-        #         if not self.quiet:
-        #             try:
-        #                 print(' | '.join(('%.3f' % m for m in magnitudes)))
-        #             except IOError:
-        #                 self.loop.quit()
-        #
-        #         if self.callback:
-        #             self.callback(magnitudes)
-        #     except KeyboardInterrupt:
-        #         self.loop.quit()
-        #     return True
+def print_data(data):
+    avg = sum(data) / len(data)
+    stdout.write("Average amplitude: %d%%  dB \r" % (avg))
+    stdout.flush()
 
-        # @staticmethod
-        # def down_sample(data, mult):
-        #     """ Given 1D data, return the binned average."""
-        #     overhang = len(data) % mult
-        #     if overhang:
-        #         data = data[:-overhang]
-        #     data = numpy.reshape(data, (len(data) / mult, mult))
-        #     data = numpy.average(data, 1)
-        #     return data
-        #
-        # def fft(self, data=None, trim_by=10, log_scale=False, div_by=100):
-        #     if data is None:
-        #         data = self.__audio.flatten()
-        #     left, right = numpy.split(numpy.abs(numpy.fft.fft(data)), 2)
-        #     ys = numpy.add(left, right[::-1])
-        #     if log_scale:
-        #         ys = numpy.multiply(20, numpy.log10(ys))
-        #     xs = numpy.arange(AudioRecorder.__BUFFER_SIZE / 2, dtype=float)
-        #     if trim_by:
-        #         i = int((AudioRecorder.__BUFFER_SIZE / 2) / trim_by)
-        #         ys = ys[:i]
-        #         xs = xs[:i] * AudioRecorder.__RATE / AudioRecorder.__BUFFER_SIZE
-        #     if div_by:
-        #         ys /= float(div_by)
-        #     return xs, ys
-        #
-        # @staticmethod
-        # def list_devices():
-        #     # List all audio input devices
-        #     pp = pyaudio.PyAudio()
-        #     i = 0
-        #     n = pp.get_device_count()
-        #     while i < n:
-        #         dev = pp.get_device_info_by_index(i)
-        #         if dev['maxInputChannels'] > 0:
-        #             print str(i)+'. '+dev['name']
-        #         else:
-        #             print str(i)+'. '+dev['name']
-        #         i += 1
-
+BANDS = 256
+AUDIOFREQ = 22050.0
 if __name__ == '__main__':
+    for i in range(0, BANDS):
+        print "Freq index {} - {}".format(i, ((AUDIOFREQ / 2.0) * i + AUDIOFREQ / 4.0) / BANDS)
     GObject.threads_init()
     Gst.init(None)
-    AudioAnalyser(PULSE_AUDIO_DEVICE, None).start()
+    AudioAnalyser(PULSE_AUDIO_DEVICE, print_data, bands=BANDS).start()
     Gtk.main()
-
