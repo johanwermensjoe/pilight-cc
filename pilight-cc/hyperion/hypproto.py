@@ -1,10 +1,11 @@
-""" Hyperion Service module. """
+""" Hyperion Protocol Buffer communication module. """
 
 # Networking
 import socket
 import struct
 
 # Protocol buffer message
+from hyperion.hyputil import HyperionError
 from message_pb2 import HyperionRequest
 from message_pb2 import HyperionReply
 from message_pb2 import ColorRequest
@@ -12,40 +13,32 @@ from message_pb2 import ImageRequest
 from message_pb2 import ClearRequest
 
 
-class HyperionError(Exception):
-    """ Error raised for hyperion connection errors.
+class HyperionProtoConnector(object):
 
-    Attributes:
-        msg     -- explanation of the error
-    """
-
-    def __init__(self, msg):
-        self.msg = msg
-
-
-class HyperionConnector(object):
-    """ Hyperion Service class.
-    """
-
-    def __init__(self, ip_address, port):
-        """ Constructor
+    def __init__(self, ip_address, port, timeout=5):
+        """
+        Connect to hyperion server.
+            :param ip_address: the host address
+            :type ip_address: str
+            :param port: the host port
+            :type port: int
+            :param timeout: timeout in seconds before error (default: 5)
+            :type timeout: int
         """
         try:
-            self.__connect(ip_address, port)
+            self.__connect(ip_address, port, timeout)
         except Exception:
             raise HyperionError("Connection failed")
 
     def __del__(self):
-        # Close the socket.
-        if self.__socket is not None:
-            self.__socket.close()
+        self.__socket.close()
 
-    def __connect(self, ip_address, port):
+    def __connect(self, ip_address, port, timeout):
         """ Attempt connection to hyperion server.
         """
         # Create a new socket.
         self.__socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__socket.settimeout(2)
+        self.__socket.settimeout(timeout)
 
         # Connect socket to the provided server.
         self.__socket.connect((ip_address, port))

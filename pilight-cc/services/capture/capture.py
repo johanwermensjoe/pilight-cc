@@ -13,8 +13,8 @@ from services.service import BaseService
 from services.service import DelayTimer
 
 # Application
-from hyperion.hyperion import HyperionConnector
-from hyperion.hyperion import HyperionError
+from hyperion.hypproto import HyperionProtoConnector
+from hyperion.hypproto import HyperionError
 from settings.settings import Setting
 
 
@@ -71,8 +71,8 @@ class CaptureService(BaseService):
         # Check that an hyperion connection is available.
         if self.__hyperion_connector is None:
             try:
-                self.__hyperion_connector = HyperionConnector(self._ip_address,
-                                                              self._port)
+                self.__hyperion_connector = HyperionProtoConnector(self._ip_address,
+                                                                   self._port)
                 self._update_state(CaptureService.StateValue.OK)
             except HyperionError as err:
                 self._update_state(CaptureService.StateValue.ERROR, err.msg)
