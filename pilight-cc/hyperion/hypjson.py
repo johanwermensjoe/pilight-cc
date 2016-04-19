@@ -1,13 +1,30 @@
 """ Hyperion JSON communication module. """
+from _socket import error
+from json import dumps
 
-import socket
-
-from hyperion.hyputil import HyperionError
+from hyperion.hyputil import HyperionError, HyperionConnector
 
 
-class HyperionJsonConnector(object):
+class HyperionJson(HyperionConnector):
+    """ Provide JSON based interface to Hyperion server.
+    """
 
-    def __init__(self, ip_address, port, timeout=10):
+    class _Command(object):
+        CLEAR = 'clear'
+        COLOR = 'color'
+        CLEAR_ALL = 'clearall'
+        EFFECT = 'send_effect'
+        SERVER_INFO = 'serverinfo'
+
+    class _Field(object):
+        COMMAND = 'command'
+        PRIORITY = 'priority'
+        COLOR = 'color'
+        EFFECT = 'send_effect'
+        EFFECT_NAME = 'name'
+        EFFECT_ARGS = 'args'
+
+    def __init__(self, ip_address, port, timeout=5):
         """
         Connect to hyperion server.
             :param ip_address: the host address
@@ -17,43 +34,80 @@ class HyperionJsonConnector(object):
             :param timeout: timeout in seconds before error (default: 5)
             :type timeout: int
         """
+        super(HyperionJson, self).__init__(ip_address, port, timeout)
+
+    def __send_json(self, fields):
+        """
+        Send a JSON message to the Hyperion server.
+            :param fields:
+            :type fields: dict
+            :return:
+            :raises HyperionError
+        """
         try:
-            self.__connect(ip_address, port, timeout)
-        except Exception:
+            self._socket.sendall(dumps(fields) + "\n")
+        except error:
+            self._connected = False
             raise HyperionError("Connection failed")
 
-    def __del__(self):
-        self.__socket.close()
-
-    def __connect(self, ip_address, port, timeout):
-        """ Attempt connection to hyperion server.
+    def clear_all(self):
         """
-        # Create a new socket.
-        self.__socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__socket.settimeout(timeout)
-
-        # Connect socket to the provided server.
-        self.__socket.connect((ip_address, port))
-
-    def disconnect(self):
-        self.socket.send('{"command":"clearall"}\n')
-
-    def send_led_data(self, led_data):
+        Clear all previous commands.
+            :return:
+            :raises: HyperionError
         """
-        Send the led data in a message format the hyperion json server understands
-        :param led_data: bytearray of the led data (r,g,b) * hyperion.ledcount
-        """
+        self.__send_json({HyperionJson._Field.COMMAND:
+                          HyperionJson._Command.CLEAR_ALL})
 
-        if not self.connected:
-            return
-        # create a message to send
-        message = '{"color":['
-        # add all the color values to the message
-        for i in range(len(led_data)):
-            message += repr(led_data[i])
-            # separate the color values with ",", but do not add a "," at the end
-            if not i == len(led_data) - 1:
-                message += ','
-        # complete message
-        message += '],"command":"color","priority":100}\n'
-        self.socket.send(message)
+    def clear(self, priority):
+        """
+        Clear all previous commands with lower priority.
+            :param priority: the priority
+            :type priority: int
+            :return:
+            :raises: HyperionError
+        """
+        self.__send_json({HyperionJson._Field.COMMAND:
+                          HyperionJson._Command.CLEAR,
+                          HyperionJson._Field.PRIORITY: priority})
+
+    def send_effect(self, priority, name, args=None):
+        """
+        Show an send_effect stored on the server.
+            :param priority: the priority
+            :type priority: int
+            :param name: the name of the send_effect
+            :type name: str
+            :param args: commandline send_effect arguments
+            :type args: dict
+            :return:
+            :raises: HyperionError
+        """
+        if args is None:
+            args = {}
+        self.__send_json({HyperionJson._Field.COMMAND:
+                          HyperionJson._Command.EFFECT,
+                          HyperionJson._Field.PRIORITY: priority,
+                          HyperionJson._Field.EFFECT: {
+                              HyperionJson._Field.EFFECT_NAME: name,
+                              HyperionJson._Field.EFFECT_ARGS: args
+                          }})
+
+    def send_colors(self, priority, colors):
+        """
+        Set individual send_colors for the LEDs or a single color.
+            :param priority: the priority
+            :type priority: int
+            :param colors: bytearray of the led data (r,g,b) * led count
+            :type colors: bytearray
+            :return:
+            :raises: HyperionError
+
+        .. Note:: If only one set of (r,g,b) values are given
+                  the color will apply to all LEDs.
+        """
+        f_colors = ",".join([repr(v) for v in colors])
+        self.__send_json({HyperionJson._Field.COMMAND:
+                          HyperionJson._Command.COLOR,
+                          HyperionJson._Field.PRIORITY: priority,
+                          HyperionJson._Field.COLOR: f_colors})

@@ -21,10 +21,25 @@ class Setting(object):
 
     HYPERION_IP_ADDRESS = 'hIpAddress'
     HYPERION_PORT = 'hPort'
+    HYPERION_LED_COUNT = 'hLeds'
+    HYPERION_LED_START_CORNER = 'hLedStartCorner'
+    HYPERION_LED_DIRECTION = 'hLedDirection'
 
     AUDIO_EFFECT_SPOTIFY_ENABLE = 'aeSpotifyAutoEnable'
     AUDIO_EFFECT_PRIORITY = 'aePriority'
     AUDIO_EFFECT_FRAME_RATE = 'aeFrameRate'
+
+
+class LedCorner(object):
+    SE = 'southeast'
+    SW = 'southwest'
+    NE = 'northeast'
+    NW = 'northwest'
+
+
+class LedDir(object):
+    CW = 'clockwise'
+    CCW = 'counterclockwise'
 
 
 class SettingsManager:
@@ -48,28 +63,32 @@ class SettingsManager:
     # Settings with default value, section and visibility.
     _CONF = {
         # Persistent settings.
-        Setting.CAPTURE_SCALE_WIDTH: _BaseSetting(64, _Section.CAPTURE, False,
-                                                  int),
-        Setting.CAPTURE_SCALE_HEIGHT: _BaseSetting(64, _Section.CAPTURE, False,
-                                                   int),
-        Setting.CAPTURE_PRIORITY: _BaseSetting(900, _Section.CAPTURE, False,
-                                               int),
-        Setting.CAPTURE_FRAME_RATE: _BaseSetting(30, _Section.CAPTURE, False,
-                                                 int),
+        Setting.CAPTURE_SCALE_WIDTH:
+            _BaseSetting(64, _Section.CAPTURE, False, int),
+        Setting.CAPTURE_SCALE_HEIGHT:
+            _BaseSetting(64, _Section.CAPTURE, False, int),
+        Setting.CAPTURE_PRIORITY:
+            _BaseSetting(900, _Section.CAPTURE, False, int),
+        Setting.CAPTURE_FRAME_RATE:
+            _BaseSetting(30, _Section.CAPTURE, False, int),
 
-        Setting.HYPERION_IP_ADDRESS: _BaseSetting("127.0.0.1",
-                                                  _Section.HYPERION,
-                                                  False, str),
-        Setting.HYPERION_PORT: _BaseSetting(19945, _Section.HYPERION, False,
-                                            int),
+        Setting.HYPERION_IP_ADDRESS:
+            _BaseSetting("127.0.0.1", _Section.HYPERION, False, str),
+        Setting.HYPERION_PORT:
+            _BaseSetting(19945, _Section.HYPERION, False, int),
+        Setting.HYPERION_LED_COUNT:
+            _BaseSetting(100, _Section.HYPERION, False, int),
+        Setting.HYPERION_LED_START_CORNER:
+            _BaseSetting(LedCorner.SE, _Section.HYPERION, False, LedCorner),
+        Setting.HYPERION_LED_DIRECTION:
+            _BaseSetting(LedDir.CCW, _Section.HYPERION, False, LedDir),
 
-        Setting.AUDIO_EFFECT_SPOTIFY_ENABLE: _BaseSetting(False, _Section.AUDIO,
-                                                          False, lambda s:
-                                                          s == 'True'),
-        Setting.AUDIO_EFFECT_PRIORITY: _BaseSetting(800, _Section.AUDIO, False,
-                                                    int),
-        Setting.AUDIO_EFFECT_FRAME_RATE: _BaseSetting(60, _Section.AUDIO, False,
-                                                      int)
+        Setting.AUDIO_EFFECT_SPOTIFY_ENABLE:
+            _BaseSetting(False, _Section.AUDIO, False, lambda s: s == 'True'),
+        Setting.AUDIO_EFFECT_PRIORITY:
+            _BaseSetting(800, _Section.AUDIO, False, int),
+        Setting.AUDIO_EFFECT_FRAME_RATE:
+            _BaseSetting(60, _Section.AUDIO, False, int)
     }
 
     def __init__(self):

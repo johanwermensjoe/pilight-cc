@@ -6,7 +6,7 @@ from services.service import BaseService
 from services.service import DelayTimer
 
 # Application
-from hyperion.hypproto import HyperionProtoConnector
+from hyperion.hypproto import HyperionProto
 from hyperion.hypproto import HyperionError
 from settings.settings import Setting
 
@@ -56,8 +56,8 @@ class AudioEffectService(BaseService):
         # Check that an hyperion connection is available.
         if self.__hyperion_connector is None:
             try:
-                self.__hyperion_connector = HyperionProtoConnector(self._ip_address,
-                                                                   self._port)
+                self.__hyperion_connector = HyperionProto(self._ip_address,
+                                                          self._port)
                 self._update_state(AudioEffectService.StateValue.OK)
             except HyperionError as err:
                 self._update_state(AudioEffectService.StateValue.ERROR, err.msg)
@@ -68,7 +68,7 @@ class AudioEffectService(BaseService):
         # TODO
         self.read_audio()
 
-        # Calculate effect frame.
+        # Calculate send_effect frame.
         # TODO
         self.calculate_effect()
 

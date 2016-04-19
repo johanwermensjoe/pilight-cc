@@ -2,6 +2,7 @@
 
 # PyGI - Screen capture (Gtk).
 from gi import require_version
+
 require_version('Gdk', '3.0')
 
 from gi.repository import Gdk
@@ -13,7 +14,7 @@ from services.service import BaseService
 from services.service import DelayTimer
 
 # Application
-from hyperion.hypproto import HyperionProtoConnector
+from hyperion.hypproto import HyperionProto
 from hyperion.hypproto import HyperionError
 from settings.settings import Setting
 
@@ -71,8 +72,8 @@ class CaptureService(BaseService):
         # Check that an hyperion connection is available.
         if self.__hyperion_connector is None:
             try:
-                self.__hyperion_connector = HyperionProtoConnector(self._ip_address,
-                                                                   self._port)
+                self.__hyperion_connector = HyperionProto(
+                    self._ip_address, self._port)
                 self._update_state(CaptureService.StateValue.OK)
             except HyperionError as err:
                 self._update_state(CaptureService.StateValue.ERROR, err.msg)

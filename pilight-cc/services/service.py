@@ -8,10 +8,7 @@ from threading import Lock
 from time import sleep, clock
 
 # Communication
-from zmq import PAIR
-from zmq import NOBLOCK
-from zmq import ZMQError
-from zmq import Context
+from zmq import PAIR, NOBLOCK, ZMQError, Context
 
 # Initialization
 from argparse import ArgumentParser
