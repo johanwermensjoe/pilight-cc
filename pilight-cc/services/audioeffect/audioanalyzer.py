@@ -10,7 +10,7 @@ require_version('Gst', '1.0')
 require_version('Gtk', '3.0')
 from gi.repository import Gst, GObject
 
-from threading import Thread, current_thread
+from threading import Thread, Lock, current_thread
 from sys import stdout
 
 PULSE_AUDIO_DEVICE = "alsa_output.pci-0000_00_1b.0.analog-stereo.monitor"
@@ -66,7 +66,8 @@ class AudioAnalyser:
         * The `error_callback` parameter should be a function
           my_error_callback(msg), where `msg` is a error message.
         """
-        self.__shutdown = False
+        self.__running = False
+        self.__lock = Lock()
         self.__source = source
         self.__callback = callback
         self.__error_callback = opts.get('error_callback', None)
@@ -190,35 +191,41 @@ class AudioAnalyser:
         # TODO Remove print
         print("on_error():", msg.parse_error())
 
-    def __check_shutdown(self, _):
-        if self.__shutdown:
-            self.__loop.quit()
-        return True
-
     def start(self):
         """ Start analysing audio.
         """
-        self.__shutdown = False
-        # Setup signals.
-        self.__bus.add_signal_watch()
-        self.__connections = [
-            self.__bus.connect('message::eos', self.__on_eos),
-            self.__bus.connect('message::error', self.__on_error),
-            self.__bus.connect('message::element', self.__on_message)
-        ]
-        self.__pipeline.set_state(Gst.State.PLAYING)
+        self.__lock.acquire()
+        if not self.__running:
+            self.__running = True
 
-        # Setup shutdown watcher and start main loop.
-        GObject.timeout_add(50, self.__check_shutdown, None)
-        Thread(target=self.__loop.run).start()
+            # Setup signals.
+            self.__bus.add_signal_watch()
+            self.__connections = [
+                self.__bus.connect('message::eos', self.__on_eos),
+                self.__bus.connect('message::error', self.__on_error),
+                self.__bus.connect('message::element', self.__on_message)
+            ]
+            self.__pipeline.set_state(Gst.State.PLAYING)
+
+            # Setup shutdown watcher and start main loop.
+            Thread(target=self.__loop.run).start()
+
+        self.__lock.release()
 
     def stop(self):
         """ Stop analysing audio.
         """
-        self.__shutdown = True
-        [self.__bus.disconnect(c) for c in self.__connections]
-        self.__bus.remove_signal_watch()
-        self.__pipeline.set_state(Gst.State.NULL)
+        self.__lock.acquire()
+        if self.__running:
+            self.__running = False
+            self.__loop.quit()
+
+            # Disconnect and set state.
+            [self.__bus.disconnect(c) for c in self.__connections]
+            self.__bus.remove_signal_watch()
+            self.__pipeline.set_state(Gst.State.NULL)
+
+        self.__lock.release()
 
     def print_band_frequencies(self):
         """ Print the frequency range corresponding to each band.
