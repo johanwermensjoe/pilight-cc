@@ -8,7 +8,7 @@ import time
 
 require_version('Gst', '1.0')
 require_version('Gtk', '3.0')
-from gi.repository import Gst, Gtk, GObject
+from gi.repository import Gst, GObject
 
 from threading import Thread, current_thread
 from sys import stdout
@@ -31,10 +31,16 @@ class AudioAnalyser:
             :type source: str
             :param callback: the callback function for spectrum data
             :type callback: callable
+            :param error_callback: the error callback function (default: None)
+            :type error_callback: callable
             :param depth: the capture bit-depth (default: 16)
             :type depth: int
             :param bands: the number of spectrum bands (default: 128)
             :type bands: int
+            :param min_band: the minimum band index (default: 0)
+            :type min_band: int
+            :param max_band: the maximum band index (default: `bands` - 1)
+            :type max_band: int
             :param amplify: magnitude amplification factor (default: 1)
             :type amplify: float
             :param threshold: the minimal magnitude in decibels (default: -80)
@@ -56,11 +62,18 @@ class AudioAnalyser:
         * The `callback` parameter should be a function
           my_callback(data), where `data` is a list of magnitudes
           for each `band` or nested lists if `multichannel` is ``True``.
+
+        * The `error_callback` parameter should be a function
+          my_error_callback(msg), where `msg` is a error message.
         """
+        self.__shutdown = False
         self.__source = source
         self.__callback = callback
+        self.__error_callback = opts.get('error_callback', None)
         self.__depth = opts.get('depth', 16)
         self.__bands = opts.get('bands', 128)
+        self.__min_band = opts.get('min_band', 0)
+        self.__max_band = opts.get('max_band', self.__bands - 1)
         self.__amplify = opts.get('bands', 1.0)
         self.__threshold = opts.get('threshold', -80)
         self.__cutoff = opts.get('cutoff', 100)
@@ -86,9 +99,7 @@ class AudioAnalyser:
         #     <vumeter>       Return VU meter output instead of spectrum.  <bands>
         #                     controls how many channels to output here.  <threshold> is
         #                     ignored.
-        #     <quiet>         Don't output to STDERR (default: False if no callback).
         # """
-        #  self.running = False
         #  self.precision = opts.get('precision')
         #  self.logamplify = opts.get('logamplify', False)
         #  self.autoamp = opts.get('autoamp', False)
@@ -97,25 +108,28 @@ class AudioAnalyser:
         #  self.db = opts.get('db', False)
         #  self.iec = opts.get('iec', False)
         #  self.vumeter = opts.get('vumeter', False)
-        #  self.bands_cutoff = opts.get('cutoff', 96)
         #  self.quiet = opts.get('quiet', self.callback is not None)
         #  self.gainhits = 0
         #  self.origamp = self.amplify
+
+        # Initiate gobject.
+        GObject.threads_init()
+        Gst.init(None)
+        self.__loop = GObject.MainLoop()
 
         self.__parser = SpectrumParser()
 
         self.__pipeline = Gst.Pipeline()
 
         # Audio source.
-        # self.__audio_source = Gst.ElementFactory.make('pulsesrc', None)
-        # self.__audio_source.set_property('device', self.__source)
-        self.__audio_source = Gst.ElementFactory.make('audiotestsrc', None)
-        self.__audio_source.set_property('freq', 1000)
-        self.__audio_source.set_property('samplesperbuffer', 100000)
+        self.__audio_source = Gst.ElementFactory.make('pulsesrc', None)
+        self.__audio_source.set_property('device', self.__source)
+        # self.__audio_source = Gst.ElementFactory.make('audiotestsrc', None)
+        # self.__audio_source.set_property('freq', 1000)
         self.__pipeline.add(self.__audio_source)
 
         self.__caps = Gst.caps_from_string(
-            "audio/x-raw, rate=(int){0}".format(AUDIO_FREQ))
+            "audio/x-raw, rate=(int){0}".format(self.__samplerate))
         self.__caps_filter = Gst.ElementFactory.make('audioconvert', None)
         self.__pipeline.add(self.__caps_filter)
 
@@ -135,12 +149,7 @@ class AudioAnalyser:
 
         # Messages.
         self.__bus = self.__pipeline.get_bus()
-        self.__bus.add_signal_watch()
-        self.__connections = [
-            self.__bus.connect('message::eos', self.__on_eos),
-            self.__bus.connect('message::error', self.__on_error),
-            self.__bus.connect('message::element', self.__on_message)
-        ]
+        self.__connections = []
 
         # Link
         self.__audio_source.link(self.__caps_filter)
@@ -150,19 +159,11 @@ class AudioAnalyser:
     def __del__(self):
         self.stop()
 
-    def start(self):
-        self.__pipeline.set_state(Gst.State.PLAYING)
-
-    def stop(self):
-        self.__bus.dissconnect(self.__connections)
-        self.__bus.remove_signal_watch()
-        self.__pipeline.set_state(Gst.State.NULL)
-
     def __on_message(self, _, msg):
         msg_st = msg.get_structure()
-        # print msg.get_structure().to_string()
         if msg_st.get_name() == AudioAnalyser.__SPECTRUM_NAME:
             # magnitudes = self.__parser.parse_message(msg_st.to_string())
+            # TODO Possible optimize parsing with min/max index.
             if self.__multichannel:
                 magnitudes = self.__parser.parse_multi_channel_message(
                     msg_st.to_string())
@@ -177,15 +178,55 @@ class AudioAnalyser:
             # print(self.__audio_source.get_property("client-name"))
             # print(self.__audio_source.get_property("current-device"))
             # print(self.__audio_source.get_property("device"))
-            self.__callback(magnitudes)
+            self.__callback(magnitudes[self.__min_band:self.__max_band])
         else:
             print(msg)
 
     def __on_eos(self, _):
-        print("on_eos():")
+        self.__error_callback("Gst error: EOS")
 
     def __on_error(self, _, msg):
+        self.__error_callback("Gst error: {}".format(msg.parse_error()))
+        # TODO Remove print
         print("on_error():", msg.parse_error())
+
+    def __check_shutdown(self, _):
+        if self.__shutdown:
+            self.__loop.quit()
+        return True
+
+    def start(self):
+        """ Start analysing audio.
+        """
+        self.__shutdown = False
+        # Setup signals.
+        self.__bus.add_signal_watch()
+        self.__connections = [
+            self.__bus.connect('message::eos', self.__on_eos),
+            self.__bus.connect('message::error', self.__on_error),
+            self.__bus.connect('message::element', self.__on_message)
+        ]
+        self.__pipeline.set_state(Gst.State.PLAYING)
+
+        # Setup shutdown watcher and start main loop.
+        GObject.timeout_add(50, self.__check_shutdown, None)
+        Thread(target=self.__loop.run).start()
+
+    def stop(self):
+        """ Stop analysing audio.
+        """
+        self.__shutdown = True
+        [self.__bus.disconnect(c) for c in self.__connections]
+        self.__bus.remove_signal_watch()
+        self.__pipeline.set_state(Gst.State.NULL)
+
+    def print_band_frequencies(self):
+        """ Print the frequency range corresponding to each band.
+        """
+        for i in range(0, self.__bands):
+            print "Freq index {} -> {} - {}".format(
+                i, ((self.__samplerate / 2.0) / self.__bands) * i,
+                   ((self.__samplerate / 2.0) / self.__bands) * (i + 1))
 
 
 class SpectrumParser(object):
@@ -193,6 +234,7 @@ class SpectrumParser(object):
     _MSG2 = "spectrum, endtime=(guint64)1600000000, timestamp=(guint64)1500000000, stream-time=(guint64)1500000000, running-time=(guint64)1500000000, duration=(guint64)100000000, magnitude=(float)< < -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80 >, < -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80 > >;"
 
     def __init__(self):
+        """ Compile regex """
         self.magnitude_parse = re.compile(
             r'''magnitude=\(float\)[<{](?:(?: < (.*) > )| (.*) )[}>]''')
         self.channel_parse = re.compile(r''' >, < ''')
@@ -237,45 +279,41 @@ class SpectrumParser(object):
                 msg[msg.find('<') + 4:-5].split('>, <')]
 
 
-
-
 def print_data(data):
-    global i
-    global measure
-    if measure:
-        i += 1
-        print i
+    # global i
+    # global measure
+    # if measure:
+    #     i += 1
+    #     print i
     # print(data)
-    avg = sum(data[0]) / len(data[0])
-    # print(data[0][0:25])
+    print(current_thread())
     stdout.write("Average amplitude: %d%%  dB \r" % (data[0][1]))
     stdout.flush()
 
 
-i = 0
-measure = False
+# i = 0
+# measure = False
 
+#
+# def t():
+#     global measure
+#     global i
+#     time.sleep(1.0)
+#     print "st"
+#     measure = True
+#     time.sleep(5.0)
+#     measure = False
+#     print(i / 5.0)
 
-def t():
-    global measure
-    global i
-    time.sleep(1.0)
-    print "st"
-    measure = True
-    time.sleep(5.0)
-    measure = False
-    print(i / 5.0)
-
-
-BANDS = 128
-AUDIO_FREQ = 22000
 if __name__ == '__main__':
-    for i in range(0, BANDS):
-        print "Freq index {} - {}".format(i, (
-            (AUDIO_FREQ / 2.0) * i + AUDIO_FREQ / 4.0) / BANDS)
-    GObject.threads_init()
-    Gst.init(None)
-    AudioAnalyser(PULSE_AUDIO_DEVICE, print_data, bands=BANDS,
-                  multichannel=False, interval=100).start()
-    Thread(target=t).start()
-    Gtk.main()
+    print(current_thread())
+    aa = AudioAnalyser(PULSE_AUDIO_DEVICE, print_data, bands=128,
+                       multichannel=False, interval=100)
+    aa.start()
+    time.sleep(2)
+    aa.stop()
+    print("\nStoppy\n")
+    time.sleep(1)
+    aa.start()
+    time.sleep(2)
+    aa.stop()
