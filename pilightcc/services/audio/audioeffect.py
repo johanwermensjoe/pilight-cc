@@ -1,16 +1,16 @@
 """ Audio Effect service module. """
 
 # Service
-from hyperion.hypjson import HyperionJson
-from services.audioeffect.audioanalyzer import AudioAnalyser
-from services.service import ServiceLauncher
 from services.service import BaseService
-from services.service import DelayTimer
+from services.service import ServiceLauncher
+from threading import Lock, Condition
 
 # Application
-from hyperion.hypproto import HyperionProto
-from hyperion.hypproto import HyperionError
-from settings.settings import Setting
+from pilightcc.services.audio.audioanalyzer import AudioAnalyser, \
+    AudioAnalyserError
+from pilightcc.hyperion.hypjson import HyperionJson
+from pilightcc.hyperion.hypproto import HyperionError
+from pilightcc.settings.settings import Setting
 
 
 class AudioEffectService(BaseService):
@@ -23,15 +23,16 @@ class AudioEffectService(BaseService):
         OK = 1
         ERROR = 2
 
-    __IMAGE_DURATION = 500
-
     __ERROR_DELAY = 5
+    __AUDIO_ANALYSER_TIMEOUT = 1
+    __IMAGE_DURATION = 500
 
     def __init__(self, port):
         """ Constructor
         """
         super(AudioEffectService, self).__init__(port, True)
         self._update_state(AudioEffectService.StateValue.OK)
+        self.__cond = Condition()
 
         # Register settings.
         hyperion_unit = self._register_setting_unit(
@@ -73,6 +74,11 @@ class AudioEffectService(BaseService):
         # TODO Args
         self.__audio_analyser = AudioAnalyser()
 
+    def __update_audio_data(self, data):
+        with self.__cond:
+            self.__data = data
+            self.__cond.notify()
+
     def _run_service(self):
         try:
             # Check that an hyperion connection is available.
@@ -80,26 +86,30 @@ class AudioEffectService(BaseService):
                 self.__hyperion_connector.connect()
                 self._update_state(AudioEffectService.StateValue.OK)
 
-            # Capture __audio.
-            # TODO
-            self.read_audio()
+            # Capture audio.
+            if not self.__audio_analyser.is_running():
+                self.__audio_analyser.start()
+
+            with self.__cond:
+                if self.__cond.wait(
+                        AudioEffectService.__AUDIO_ANALYSER_TIMEOUT):
+                    # Only update if not timed out.
+                    data = self.__data
+                else:
+                    # AudioAnalyser is not sending updates.
+                    raise AudioAnalyserError("AudioAnalyser error")
 
             # Calculate send_effect frame.
-            # TODO
-            self.calculate_effect()
+            self.calculate_effect(data)
 
             # Send message.
             # TODO
-        except HyperionError as err:
+        except (HyperionError, AudioAnalyserError) as err:
             self._update_state(AudioEffectService.StateValue.ERROR, err.msg)
             self._safe_delay(AudioEffectService.__ERROR_DELAY)
 
     @staticmethod
-    def read_audio():
-        pass
-
-    @staticmethod
-    def calculate_effect():
+    def calculate_effect(data):
         pass
 
 

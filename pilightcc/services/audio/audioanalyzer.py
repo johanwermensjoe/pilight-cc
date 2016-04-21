@@ -1,17 +1,13 @@
 """ Audio Analyser module. """
 
 # PyGI - Audio recording and processing (Gst/GStreamer)
-import re
 from gi import require_version
-
-import time
 
 require_version('Gst', '1.0')
 require_version('Gtk', '3.0')
 from gi.repository import Gst, GObject
 
 from threading import Thread, Lock, current_thread
-from sys import stdout
 
 PULSE_AUDIO_DEVICE = "alsa_output.pci-0000_00_1b.0.analog-stereo.monitor"
 
@@ -184,9 +180,11 @@ class AudioAnalyser:
             print(msg)
 
     def __on_eos(self, _):
+        self.stop()
         self.__error_callback("Gst error: EOS")
 
     def __on_error(self, _, msg):
+        self.stop()
         self.__error_callback("Gst error: {}".format(msg.parse_error()))
         # TODO Remove print
         print("on_error():", msg.parse_error())
@@ -194,38 +192,42 @@ class AudioAnalyser:
     def start(self):
         """ Start analysing audio.
         """
-        self.__lock.acquire()
-        if not self.__running:
-            self.__running = True
+        with self.__lock:
+            if not self.__running:
+                self.__running = True
 
-            # Setup signals.
-            self.__bus.add_signal_watch()
-            self.__connections = [
-                self.__bus.connect('message::eos', self.__on_eos),
-                self.__bus.connect('message::error', self.__on_error),
-                self.__bus.connect('message::element', self.__on_message)
-            ]
-            self.__pipeline.set_state(Gst.State.PLAYING)
+                # Setup signals.
+                self.__bus.add_signal_watch()
+                self.__connections = [
+                    self.__bus.connect('message::eos', self.__on_eos),
+                    self.__bus.connect('message::error', self.__on_error),
+                    self.__bus.connect('message::element', self.__on_message)
+                ]
+                self.__pipeline.set_state(Gst.State.PLAYING)
 
-            # Setup shutdown watcher and start main loop.
-            Thread(target=self.__loop.run).start()
-
-        self.__lock.release()
+                # Setup shutdown watcher and start main loop.
+                Thread(target=self.__loop.run).start()
 
     def stop(self):
         """ Stop analysing audio.
         """
-        self.__lock.acquire()
-        if self.__running:
-            self.__running = False
-            self.__loop.quit()
+        with self.__lock:
+            if self.__running:
+                self.__running = False
+                self.__loop.quit()
 
-            # Disconnect and set state.
-            [self.__bus.disconnect(c) for c in self.__connections]
-            self.__bus.remove_signal_watch()
-            self.__pipeline.set_state(Gst.State.NULL)
+                # Disconnect and set state.
+                [self.__bus.disconnect(c) for c in self.__connections]
+                self.__bus.remove_signal_watch()
+                self.__pipeline.set_state(Gst.State.NULL)
 
-        self.__lock.release()
+    def is_running(self):
+        """ The running status.
+            :return: True if the analyser is running.
+            :rtype: bool
+        """
+        with self.__lock:
+            return self.__running
 
     def print_band_frequencies(self):
         """ Print the frequency range corresponding to each band.
@@ -236,11 +238,25 @@ class AudioAnalyser:
                    ((self.__samplerate / 2.0) / self.__bands) * (i + 1))
 
 
+class AudioAnalyserError(object):
+    """ Error raised for audio analysis errors.
+    """
+
+    def __init__(self, msg):
+        """
+            :param msg: the error message
+            :type msg: str
+        """
+        super(AudioAnalyserError, self).__init__(self)
+        self.msg = msg
+
+
 class SpectrumParser(object):
     _MSG1 = "spectrum, endtime=(guint64)2500000000, timestamp=(guint64)2400000000, stream-time=(guint64)2400000000, running-time=(guint64)2400000000, duration=(guint64)100000000, magnitude=(float){ -28.070123672485352, -30.749044418334961, -33.143180847167969, -36.715190887451172, -40.343479156494141, -41.205394744873047, -41.560638427734375, -43.380313873291016, -46.788780212402344, -44.788078308105469, -42.305328369140625, -44.200847625732422, -40.548503875732422, -45.550392150878906, -46.724185943603516, -48.269428253173828, -51.178646087646484, -51.046237945556641, -49.490936279296875, -48.913726806640625, -49.530693054199219, -52.828620910644531, -52.078758239746094, -52.013782501220703, -52.997989654541016, -56.21478271484375, -55.835205078125, -56.219940185546875, -57.952301025390625, -62.604873657226562, -60.482810974121094, -58.831062316894531, -61.149932861328125, -61.567047119140625, -58.601184844970703, -60.795253753662109, -61.843009948730469, -63.226913452148438, -63.0216064453125, -61.332805633544922, -58.983997344970703, -58.646690368652344, -65.137275695800781, -64.511680603027344, -67.182647705078125, -66.760169982910156, -64.001670837402344, -66.311065673828125, -68.252510070800781, -65.517837524414062, -65.633865356445312, -66.019287109375, -65.434051513671875, -66.801239013671875, -68.136795043945312, -69.886146545410156, -71.071182250976562, -71.225425720214844, -68.818099975585938, -70.026008605957031, -66.050384521484375, -66.653907775878906, -66.2828369140625, -65.506828308105469, -66.304916381835938, -68.831565856933594, -68.145759582519531, -66.593887329101562, -65.731842041015625, -69.8892822265625, -68.144325256347656, -67.02142333984375, -69.02935791015625, -66.622467041015625, -68.351432800292969, -68.04571533203125, -70.514373779296875, -71.784934997558594, -69.944366455078125, -71.59356689453125, -68.998359680175781, -68.924209594726562, -71.486404418945312, -71.672943115234375, -71.02801513671875, -73.130470275878906, -73.786224365234375, -72.849273681640625, -73.184234619140625, -73.964820861816406, -75.090621948242188, -76.132926940917969, -75.9791259765625, -73.833259582519531, -76.507675170898438, -75.889350891113281, -74.05096435546875, -76.033271789550781, -74.589744567871094, -75.123558044433594, -76.096931457519531, -75.760726928710938, -78.022041320800781, -75.974090576171875, -77.533882141113281, -76.653663635253906, -76.268714904785156, -76.281829833984375, -77.650871276855469, -78.658660888671875, -78.417457580566406, -79.383338928222656, -78.981643676757812, -79.225387573242188, -79.512313842773438, -79.607864379882812, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80 };"
     _MSG2 = "spectrum, endtime=(guint64)1600000000, timestamp=(guint64)1500000000, stream-time=(guint64)1500000000, running-time=(guint64)1500000000, duration=(guint64)100000000, magnitude=(float)< < -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80 >, < -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80, -80 > >;"
 
     def __init__(self):
+        import re
         """ Compile regex """
         self.magnitude_parse = re.compile(
             r'''magnitude=\(float\)[<{](?:(?: < (.*) > )| (.*) )[}>]''')
@@ -293,6 +309,7 @@ def print_data(data):
     #     i += 1
     #     print i
     # print(data)
+    from sys import stdout
     print(current_thread())
     stdout.write("Average amplitude: %d%%  dB \r" % (data[0][1]))
     stdout.flush()
@@ -316,11 +333,13 @@ if __name__ == '__main__':
     print(current_thread())
     aa = AudioAnalyser(PULSE_AUDIO_DEVICE, print_data, bands=128,
                        multichannel=False, interval=100)
+    from time import sleep
+
     aa.start()
-    time.sleep(2)
+    sleep(2)
     aa.stop()
     print("\nStoppy\n")
-    time.sleep(1)
+    sleep(1)
     aa.start()
-    time.sleep(2)
+    sleep(2)
     aa.stop()
