@@ -170,30 +170,21 @@ class SettingsManager:
     def get_settings(self):
         """ Get a copy of all settings.
         """
-        try:
-            self.__settings_lock.acquire()
+        with self.__settings_lock:
             return self.__settings.copy()
-        finally:
-            self.__settings_lock.release()
 
     def get_setting(self, key):
         """ Get a setting value.
         - key   : the key of the setting
         """
-        try:
-            self.__settings_lock.acquire()
+        with self.__settings_lock:
             return self.__settings[key]
-        finally:
-            self.__settings_lock.release()
 
     def set_setting(self, key, value):
         """ Set a setting value.
         - key   : the key of the setting
         - value : the value of the setting
         """
-        try:
-            self.__settings_lock.acquire()
+        with self.__settings_lock:
             self.__settings[key] = value
             self.__notify_listeners()
-        finally:
-            self.__settings_lock.release()

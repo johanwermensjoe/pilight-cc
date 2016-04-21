@@ -1,7 +1,7 @@
 import unittest
 from timeit import timeit
 
-from services.capture.capture import CaptureService
+from pilightcc.services.capture.capture import CaptureService
 
 
 class CaptureTestCase(unittest.TestCase):

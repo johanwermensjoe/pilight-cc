@@ -9,14 +9,14 @@ from gi.repository import Gdk
 from gi.repository import GdkPixbuf
 
 # Service
-from services.service import ServiceLauncher
-from services.service import BaseService
-from services.service import DelayTimer
+from pilightcc.services.service import ServiceLauncher
+from pilightcc.services.service import BaseService
+from pilightcc.services.service import DelayTimer
 
 # Application
-from hyperion.hypproto import HyperionProto
-from hyperion.hypproto import HyperionError
-from settings.settings import Setting
+from pilightcc.hyperion.hypproto import HyperionProto
+from pilightcc.hyperion.hypproto import HyperionError
+from pilightcc.settings.settings import Setting
 
 
 class CaptureService(BaseService):
@@ -29,9 +29,8 @@ class CaptureService(BaseService):
         OK = 1
         ERROR = 2
 
-    __IMAGE_DURATION = 500
-
     __ERROR_DELAY = 5
+    __IMAGE_DURATION = 500
 
     def __init__(self, port):
         """ Constructor

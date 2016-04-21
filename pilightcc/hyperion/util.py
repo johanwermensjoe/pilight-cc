@@ -2,8 +2,10 @@
 
 from socket import socket, AF_INET, SOCK_STREAM, error
 
+from pilightcc.util.error import BaseError
 
-class HyperionError(Exception):
+
+class HyperionError(BaseError):
     """ Error raised for hyperion connection errors.
     """
 
@@ -12,8 +14,7 @@ class HyperionError(Exception):
             :param msg: the error message
             :type msg: str
         """
-        super(HyperionError, self).__init__(self)
-        self.msg = msg
+        super(HyperionError, self).__init__(self, msg)
 
 
 class HyperionConnector(object):

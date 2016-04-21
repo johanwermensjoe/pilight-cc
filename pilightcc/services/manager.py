@@ -2,15 +2,15 @@
 
 # Processes
 from subprocess import Popen
+from os.path import abspath
 
 # Services
-from os.path import abspath
-from capture import capture
-from audioeffect import audioeffect
-from services.service import ServiceConnector
+from pilightcc.services.capture import capture
+from pilightcc.services.audio import audioeffect
+from pilightcc.services.service import ServiceConnector
 
 # Settings
-from settings.settings import SettingsManager
+from pilightcc.settings.settings import SettingsManager
 
 
 class ServiceId(object):

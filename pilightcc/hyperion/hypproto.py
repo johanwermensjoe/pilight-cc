@@ -5,8 +5,8 @@ from socket import error
 from struct import pack, unpack
 
 # Protocol buffer message
-from hyperion.hyputil import HyperionError, HyperionConnector
-from hyperion.message_pb2 import HyperionRequest, HyperionReply, \
+from pilightcc.hyperion.util import HyperionError, HyperionConnector
+from pilightcc.hyperion.message_pb2 import HyperionRequest, HyperionReply, \
     ColorRequest, ImageRequest, ClearRequest
 
 

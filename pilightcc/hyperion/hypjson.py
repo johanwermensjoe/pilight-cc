@@ -2,7 +2,7 @@
 from _socket import error
 from json import dumps
 
-from hyperion.hyputil import HyperionError, HyperionConnector
+from pilightcc.hyperion.util import HyperionError, HyperionConnector
 
 
 class HyperionJson(HyperionConnector):

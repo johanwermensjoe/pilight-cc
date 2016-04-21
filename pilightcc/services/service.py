@@ -1,8 +1,7 @@
 """ Service module. """
 
 # Multiprocessing
-from threading import Thread
-from threading import Lock
+from threading import Thread, Lock
 
 # Delay
 from time import sleep, clock
@@ -269,19 +268,13 @@ class ServiceConnector(object):
             self.__update_state(msg.data)
 
     def __update_state(self, data):
-        try:
-            self.__state_lock.acquire()
+        with self.__state_lock:
             self.__state = ServiceState.from_data(data)
             print "State received: {0}".format(self.__state)
-        finally:
-            self.__state_lock.release()
 
     def get_state(self):
-        try:
-            self.__state_lock.acquire()
+        with self.__state_lock:
             return self.__state
-        finally:
-            self.__state_lock.release()
 
     def get_port(self):
         """ Return the bound port. """
