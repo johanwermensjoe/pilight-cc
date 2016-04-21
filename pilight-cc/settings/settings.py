@@ -21,9 +21,10 @@ class Setting(object):
 
     HYPERION_IP_ADDRESS = 'hIpAddress'
     HYPERION_PORT = 'hPort'
-    HYPERION_LED_COUNT = 'hLeds'
-    HYPERION_LED_START_CORNER = 'hLedStartCorner'
-    HYPERION_LED_DIRECTION = 'hLedDirection'
+
+    LED_COUNT = 'lCount'
+    LED_START_CORNER = 'lStartCorner'
+    LED_DIRECTION = 'lDirection'
 
     AUDIO_EFFECT_SPOTIFY_ENABLE = 'aeSpotifyAutoEnable'
     AUDIO_EFFECT_PRIORITY = 'aePriority'
@@ -76,11 +77,11 @@ class SettingsManager:
             _BaseSetting("127.0.0.1", _Section.HYPERION, False, str),
         Setting.HYPERION_PORT:
             _BaseSetting(19945, _Section.HYPERION, False, int),
-        Setting.HYPERION_LED_COUNT:
+        Setting.LED_COUNT:
             _BaseSetting(100, _Section.HYPERION, False, int),
-        Setting.HYPERION_LED_START_CORNER:
+        Setting.LED_START_CORNER:
             _BaseSetting(LedCorner.SE, _Section.HYPERION, False, LedCorner),
-        Setting.HYPERION_LED_DIRECTION:
+        Setting.LED_DIRECTION:
             _BaseSetting(LedDir.CCW, _Section.HYPERION, False, LedDir),
 
         Setting.AUDIO_EFFECT_SPOTIFY_ENABLE:

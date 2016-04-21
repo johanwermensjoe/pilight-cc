@@ -46,8 +46,10 @@ class HyperionProto(HyperionConnector):
 
             # Check the reply
             if not reply.success:
+                self._connected = False
                 raise HyperionError("Hyperion server error: " + reply.error)
         except error:
+            self._connected = False
             raise HyperionError("Hyperion server connection error")
 
     def send_color(self, color, priority, duration=-1):

@@ -62,7 +62,7 @@ class HyperionConnector(object):
             self._connected = False
 
     def is_connected(self):
-        """
+        """ The connection status.
             :return: True if is connected to server
             :rtype: bool
         """

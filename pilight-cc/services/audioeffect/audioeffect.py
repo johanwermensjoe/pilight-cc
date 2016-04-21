@@ -1,6 +1,8 @@
 """ Audio Effect service module. """
 
 # Service
+from hyperion.hypjson import HyperionJson
+from services.audioeffect.audioanalyzer import AudioAnalyser
 from services.service import ServiceLauncher
 from services.service import BaseService
 from services.service import DelayTimer
@@ -21,7 +23,7 @@ class AudioEffectService(BaseService):
         OK = 1
         ERROR = 2
 
-    _IMAGE_DURATION = 500
+    __IMAGE_DURATION = 500
 
     __ERROR_DELAY = 5
 
@@ -30,53 +32,67 @@ class AudioEffectService(BaseService):
         """
         super(AudioEffectService, self).__init__(port, True)
         self._update_state(AudioEffectService.StateValue.OK)
-        self.__delay_timer = DelayTimer()
-        self.__disconnect()
 
         # Register settings.
-        hyperion_unit = self._register_setting_unit(self.__disconnect())
+        hyperion_unit = self._register_setting_unit(
+            self.__update_hyperion_connector())
         hyperion_unit.add('_ip_address', Setting.HYPERION_IP_ADDRESS)
         hyperion_unit.add('_port', Setting.HYPERION_PORT)
 
-        audio_effect_unit = self._register_setting_unit(self.__update_timer)
+        audio_effect_unit = self._register_setting_unit(
+            self.__update_audio_analyser())
         audio_effect_unit.add('_frame_rate', Setting.AUDIO_EFFECT_FRAME_RATE)
+        audio_effect_unit.add('_led_count', Setting.LED_COUNT)
+        audio_effect_unit.add('_led_start_corner', Setting.LED_START_CORNER)
+        audio_effect_unit.add('_led_direction', Setting.LED_DIRECTION)
 
         std_unit = self._register_setting_unit()
         std_unit.add('_priority', Setting.AUDIO_EFFECT_PRIORITY)
 
-    def __disconnect(self):
-        self.__hyperion_connector = None
+    def _setup(self):
+        self.__update_hyperion_connector()
+        self.__update_audio_analyser()
 
-    def __update_timer(self):
-        self.__delay_timer.set_delay(1.0 / self._frame_rate)
+    def _enable(self, enable):
+        if enable:
+            self.__hyperion_connector.connect()
+            self.__audio_analyser.start()
+        else:
+            self.__hyperion_connector.disconnect()
+            self.__audio_analyser.stop()
+
+    def __update_hyperion_connector(self):
+        if self.__hyperion_connector is not None:
+            self.__hyperion_connector.disconnect()
+        self.__hyperion_connector = HyperionJson(
+            self._ip_address, self._port, self._priority)
+
+    def __update_audio_analyser(self):
+        if self.__audio_analyser is not None:
+            self.__audio_analyser.stop()
+        # TODO Args
+        self.__audio_analyser = AudioAnalyser()
 
     def _run_service(self):
-        self.__delay_timer.start()
-
-        # Check that an hyperion connection is available.
-        if self.__hyperion_connector is None:
-            try:
-                self.__hyperion_connector = HyperionProto(self._ip_address,
-                                                          self._port)
+        try:
+            # Check that an hyperion connection is available.
+            if not self.__hyperion_connector.is_connected():
+                self.__hyperion_connector.connect()
                 self._update_state(AudioEffectService.StateValue.OK)
-            except HyperionError as err:
-                self._update_state(AudioEffectService.StateValue.ERROR, err.msg)
-                self._safe_delay(AudioEffectService.__ERROR_DELAY)
-                return
 
-        # Capture __audio.
-        # TODO
-        self.read_audio()
+            # Capture __audio.
+            # TODO
+            self.read_audio()
 
-        # Calculate send_effect frame.
-        # TODO
-        self.calculate_effect()
+            # Calculate send_effect frame.
+            # TODO
+            self.calculate_effect()
 
-        # Send message.
-        # TODO
-
-        # Wait until next run.
-        self.__delay_timer.delay()
+            # Send message.
+            # TODO
+        except HyperionError as err:
+            self._update_state(AudioEffectService.StateValue.ERROR, err.msg)
+            self._safe_delay(AudioEffectService.__ERROR_DELAY)
 
     @staticmethod
     def read_audio():

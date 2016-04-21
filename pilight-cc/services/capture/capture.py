@@ -38,11 +38,10 @@ class CaptureService(BaseService):
         """
         super(CaptureService, self).__init__(port, True)
         self._update_state(CaptureService.StateValue.OK)
-        self.__delay_timer = DelayTimer()
-        self.__disconnect()
 
         # Register settings.
-        hyperion_unit = self._register_setting_unit(self.__disconnect())
+        hyperion_unit = self._register_setting_unit(
+            self.__update_hyperion_connector)
         hyperion_unit.add('_ip_address', Setting.HYPERION_IP_ADDRESS)
         hyperion_unit.add('_port', Setting.HYPERION_PORT)
 
@@ -54,8 +53,21 @@ class CaptureService(BaseService):
         std_unit.add('_scale_height', Setting.CAPTURE_SCALE_HEIGHT)
         std_unit.add('_priority', Setting.CAPTURE_PRIORITY)
 
-    def __disconnect(self):
-        self.__hyperion_connector = None
+    def _setup(self):
+        self.__update_hyperion_connector()
+        self.__delay_timer = DelayTimer()
+
+    def _enable(self, enable):
+        if enable:
+            self.__hyperion_connector.connect()
+        else:
+            self.__hyperion_connector.disconnect()
+
+    def __update_hyperion_connector(self):
+        if self.__hyperion_connector is not None:
+            self.__hyperion_connector.disconnect()
+        self.__hyperion_connector = HyperionProto(
+            self._ip_address, self._port, self._priority)
 
     def __update_timer(self):
         self.__delay_timer.set_delay(1.0 / self._frame_rate)
@@ -69,32 +81,27 @@ class CaptureService(BaseService):
     def _run_service(self):
         self.__delay_timer.start()
 
-        # Check that an hyperion connection is available.
-        if self.__hyperion_connector is None:
-            try:
-                self.__hyperion_connector = HyperionProto(
-                    self._ip_address, self._port)
-                self._update_state(CaptureService.StateValue.OK)
-            except HyperionError as err:
-                self._update_state(CaptureService.StateValue.ERROR, err.msg)
-                self._safe_delay(CaptureService.__ERROR_DELAY)
-                return
-
         try:
-            # Capture and pass to hyperion service.
+            # Check that an hyperion connection is available.
+            if not self.__hyperion_connector.is_connected():
+                self.__hyperion_connector.connect()
+                self._update_state(CaptureService.StateValue.OK)
+
+            # Capture frame.
             self.__update_pixel_buffer()
-            self.__hyperion_connector.send_image(self._scale_width,
-                                                 self._scale_height,
-                                                 self.__data.get_pixels(),
-                                                 self._priority,
-                                                 CaptureService.__IMAGE_DURATION)
+
+            # Send to hyperion server.
+            self.__hyperion_connector.send_image(
+                self._scale_width, self._scale_height, self.__data.get_pixels(),
+                self._priority, CaptureService.__IMAGE_DURATION)
         except HyperionError as err:
-            del self.__hyperion_connector
             self._update_state(CaptureService.StateValue.ERROR, err.msg)
+            self._safe_delay(CaptureService.__ERROR_DELAY)
 
         # Wait until next run.
         self.__delay_timer.delay()
 
+    # TODO Maybe use Gst?
     @staticmethod
     def get_pixel_buffer():
         win = Gdk.get_default_root_window()

@@ -27,9 +27,9 @@ class BaseService(object):
             self.__callback = callback
             self.__id_key_pairs = []
 
-        def add(self, id, key):
-            self.__id_key_pairs.append((id, key))
-            setattr(self.__owner, id, None)
+        def add(self, id_, key):
+            self.__id_key_pairs.append((id_, key))
+            setattr(self.__owner, id_, None)
 
         def has_changes(self, settings):
             for (prop, key) in self.__id_key_pairs:
@@ -48,7 +48,7 @@ class BaseService(object):
 
     __HOST_ADDRESS = "tcp://127.0.0.1"
 
-    def __init__(self, port, enable_settings=False):
+    def __init__(self, port, require_settings=False):
         """ Constructor
         - port      : the 0mq communication port
         """
@@ -56,90 +56,77 @@ class BaseService(object):
         self.__context = Context()
         self.__socket = self.__context.socket(PAIR)
         print "Service started on: tcp://127.0.0.1:{0}".format(port)
-        self.__socket.connect("{0}:{1}".format(BaseService.__HOST_ADDRESS,
-                                               port))
+        self.__socket.connect("{0}:{1}".format(
+            BaseService.__HOST_ADDRESS, port))
 
         # Initialize state.
-        self.__require_settings = enable_settings
-        self.__enable = False
-        self.__shutdown = False
+        self.__enabled = False
+        self.__shutting_down = False
         self._state = None
         self._update_state()
 
+        # Setup service if possible.
+        if not require_settings:
+            self._setup()
+            self.__initialized = True
+        else:
+            self.__initialized = False
+
         # Setup setting handling.
         self.__setting_units = []
+
+    def __del__(self):
+        self.__socket.close()
+        self.__context.destroy()
 
     def __load_settings(self, settings):
         for setting_unit in self.__setting_units:
             if setting_unit.has_changes(settings):
                 setting_unit.update(settings)
 
-    def __del__(self):
-        self.__socket.close()
-        self.__context.destroy()
+    def __service_setup(self):
+        self._setup()
+        self.__initialized = True
+        # Enable after initialization if already set to be enabled.
+        if self.__enabled:
+            self.__service_enable(self.__enabled)
 
-    def __handle_std_message(self, msg):
+    def __service_enable(self, enable):
+        self.__enabled = enable
+        # Only enable/disable if initialized first.
+        if self.__initialized:
+            self._enable(enable)
+
+    def __service_on_shutdown(self):
+        self.__shutting_down = True
+        self._enable(False)
+        self._on_shutdown()
+
+    def __service_handle_message(self, msg):
         """ Handle standard message types.
         - msg   : the message (None is allowed)
         """
         if msg is not None:
             print "Message received: {0} - {1}".format(msg.type, msg.data)
             if msg.type == ServiceMessage.Type.ENABLE:
-                self.__enable = msg.data
-                self._update_state()
+                # Enable/Disable if state changed.
+                if self.__enabled != msg.data:
+                    self.__service_enable(msg.data)
+                    self._update_state()
+
             elif msg.type == ServiceMessage.Type.KILL:
-                self.__shutdown = True
-                self._update_state()
-                self._on_shutdown()
+                if not self.__shutting_down:
+                    self.__service_on_shutdown()
+                    self._update_state()
+
             elif msg.type == ServiceMessage.Type.SETTINGS:
                 self.__load_settings(msg.data)
+                # Do first time setup if waiting for settings.
+                if not self.__initialized:
+                    self.__service_setup()
+
             else:
                 self._handle_message(msg)
-
-    def run(self):
-        """ Service execution method.
-        Should not be overridden.
-        """
-        # Wait for initial settings if required.
-        if self.__require_settings:
-            while not self.__shutdown:
-                print "Waiting for initial settings"
-                start_msg = ServiceMessage.wait_for_message(self.__socket)
-                self.__handle_std_message(start_msg)
-                if start_msg.type == ServiceMessage.Type.SETTINGS:
-                    break
-
-        # Main loop, exit on leave.
-        while not self.__shutdown:
-            # Check for any incoming messages, wait if disabled.
-            if self.__enable:
-                # Run service.
-                self._run_service()
-                msg = ServiceMessage.check_for_message(self.__socket)
-            else:
-                msg = ServiceMessage.wait_for_message(self.__socket)
-
-            self.__handle_std_message(msg)
-
-    def _on_shutdown(self):
-        """ To be implemented by subclass.
-        Called if the service is signaled to shutdown.
-        """
-        pass
-
-    def _handle_message(self, msg):
-        """ Can be implemented by subclass.
-        Called when a message of unknown type is received.
-        - msg   : the received message
-        """
-        pass
-
-    def _run_service(self):
-        """ To be implemented by subclass.
-        Called periodically by the process, with settings updated
-        and enable flag checked before every run.
-        """
-        raise NotImplementedError("Please implement this method")
 
     def _register_setting_unit(self, callback=None):
         setting_unit = BaseService.__SettingUnit(self, callback)
@@ -156,7 +143,8 @@ class BaseService(object):
         except AttributeError:
             pass
         # Only update if new state is different.
-        new_state = ServiceState(self.__enable, self.__shutdown, value, msg)
+        new_state = ServiceState(self.__enabled, self.__shutting_down, value,
+                                 msg)
         print "State updated: {0}".format(new_state)
         if self._state != new_state:
             self._state = new_state
@@ -171,11 +159,63 @@ class BaseService(object):
 
             # Check and handle any messages.
             msg = ServiceMessage.check_for_message(self.__socket)
-            self.__handle_std_message(msg)
-            if self.__shutdown:
+            self.__service_handle_message(msg)
+            if self.__shutting_down:
                 return
         # Sleep for any remaining delay.
         sleep(delay)
+
+    def run(self):
+        """ Service execution method.
+        Should not be overridden.
+        """
+        # Main loop, exit on leave.
+        while not self.__shutting_down:
+            # Check for any incoming messages, wait if disabled.
+            if self.__enabled and self.__initialized:
+                # Run service.
+                self._run_service()
+                msg = ServiceMessage.check_for_message(self.__socket)
+            else:
+                msg = ServiceMessage.wait_for_message(self.__socket)
+
+            self.__service_handle_message(msg)
+
+    def _enable(self, enable):
+        """ Can be implemented by subclass.
+        Called if the service is signaled to enable/disable.
+            :param enable: enable/disable
+            :type enable: bool
+        """
+        pass
+
+    def _setup(self):
+        """ Can be implemented by subclass.
+        Called when the service is first enabled or after
+        settings are first set (if required=True).
+        """
+        pass
+
+    def _on_shutdown(self):
+        """ Can be implemented by subclass.
+        Called if the service is signaled to shutdown.
+        """
+        pass
+
+    def _handle_message(self, msg):
+        """ Can be implemented by subclass.
+        Called when a message of unknown type is received.
+            :param msg: the received message
+            :type msg: str
+        """
+        pass
+
+    def _run_service(self):
+        """ To be implemented by subclass.
+        Called periodically by the process, with settings updated
+        and enable flag checked before every run.
+        """
+        raise NotImplementedError("Please implement this method")
 
 
 class ServiceLauncher(object):
