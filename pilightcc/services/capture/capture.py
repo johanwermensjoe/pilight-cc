@@ -37,6 +37,8 @@ class CaptureService(BaseService):
         """
         super(CaptureService, self).__init__(port, True)
         self._update_state(CaptureService.StateValue.OK)
+        self.__hyperion_connector = None
+        self.__delay_timer = DelayTimer()
 
         # Register settings.
         hyperion_unit = self._register_setting_unit(
@@ -54,11 +56,13 @@ class CaptureService(BaseService):
 
     def _setup(self):
         self.__update_hyperion_connector()
-        self.__delay_timer = DelayTimer()
 
     def _enable(self, enable):
         if enable:
-            self.__hyperion_connector.connect()
+            try:
+                self.__hyperion_connector.connect()
+            except HyperionError:
+                pass
         else:
             self.__hyperion_connector.disconnect()
 
@@ -66,7 +70,7 @@ class CaptureService(BaseService):
         if self.__hyperion_connector is not None:
             self.__hyperion_connector.disconnect()
         self.__hyperion_connector = HyperionProto(
-            self._ip_address, self._port, self._priority)
+            self._ip_address, self._port)
 
     def __update_timer(self):
         self.__delay_timer.set_delay(1.0 / self._frame_rate)

@@ -32,6 +32,8 @@ class HyperionProto(HyperionConnector):
         A RuntimeError will be raised if the reply contains an error
         - message : proto request to send
         """
+        if not self._connected:
+            raise HyperionError("Hyperion server error: not connected")
         try:
             # Send the message.
             binary_request = message.SerializeToString()

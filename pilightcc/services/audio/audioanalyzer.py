@@ -3,6 +3,8 @@
 # PyGI - Audio recording and processing (Gst/GStreamer)
 from gi import require_version
 
+from pilightcc.util.error import BaseError
+
 require_version('Gst', '1.0')
 require_version('Gtk', '3.0')
 from gi.repository import Gst, GObject
@@ -222,7 +224,8 @@ class AudioAnalyser:
                 self.__pipeline.set_state(Gst.State.NULL)
 
     def is_running(self):
-        """ The running status.
+        """
+        The running status.
             :return: True if the analyser is running.
             :rtype: bool
         """
@@ -238,7 +241,7 @@ class AudioAnalyser:
                    ((self.__samplerate / 2.0) / self.__bands) * (i + 1))
 
 
-class AudioAnalyserError(object):
+class AudioAnalyserError(BaseError):
     """ Error raised for audio analysis errors.
     """
 

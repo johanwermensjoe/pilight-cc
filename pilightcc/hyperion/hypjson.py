@@ -71,13 +71,13 @@ class HyperionJson(HyperionConnector):
                           HyperionJson._Command.CLEAR,
                           HyperionJson._Field.PRIORITY: priority})
 
-    def send_effect(self, priority, name, args=None):
+    def send_effect(self, name, priority, args=None):
         """
         Show an send_effect stored on the server.
-            :param priority: the priority
-            :type priority: int
             :param name: the name of the send_effect
             :type name: str
+            :param priority: the priority
+            :type priority: int
             :param args: commandline send_effect arguments
             :type args: dict
             :return:
@@ -93,13 +93,13 @@ class HyperionJson(HyperionConnector):
                               HyperionJson._Field.EFFECT_ARGS: args
                           }})
 
-    def send_colors(self, priority, colors):
+    def send_colors(self, colors, priority):
         """
         Set individual send_colors for the LEDs or a single color.
-            :param priority: the priority
-            :type priority: int
             :param colors: bytearray of the led data (r,g,b) * led count
             :type colors: bytearray
+            :param priority: the priority
+            :type priority: int
             :return:
             :raises: HyperionError
 

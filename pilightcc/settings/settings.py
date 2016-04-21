@@ -22,7 +22,9 @@ class Setting(object):
     HYPERION_IP_ADDRESS = 'hIpAddress'
     HYPERION_PORT = 'hPort'
 
-    LED_COUNT = 'lCount'
+    LED_COUNT_TOP = 'lCountTop'
+    LED_COUNT_BOTTOM = 'lCountBottom'
+    LED_COUNT_SIDE = 'lCountSide'
     LED_START_CORNER = 'lStartCorner'
     LED_DIRECTION = 'lDirection'
 
@@ -77,12 +79,16 @@ class SettingsManager:
             _BaseSetting("127.0.0.1", _Section.HYPERION, False, str),
         Setting.HYPERION_PORT:
             _BaseSetting(19945, _Section.HYPERION, False, int),
-        Setting.LED_COUNT:
-            _BaseSetting(100, _Section.HYPERION, False, int),
+        Setting.LED_COUNT_TOP:
+            _BaseSetting(30, _Section.HYPERION, False, int),
+        Setting.LED_COUNT_BOTTOM:
+            _BaseSetting(20, _Section.HYPERION, False, int),
+        Setting.LED_COUNT_SIDE:
+            _BaseSetting(15, _Section.HYPERION, False, int),
         Setting.LED_START_CORNER:
-            _BaseSetting(LedCorner.SE, _Section.HYPERION, False, LedCorner),
+            _BaseSetting(LedCorner.SE, _Section.HYPERION, False, str),
         Setting.LED_DIRECTION:
-            _BaseSetting(LedDir.CCW, _Section.HYPERION, False, LedDir),
+            _BaseSetting(LedDir.CCW, _Section.HYPERION, False, str),
 
         Setting.AUDIO_EFFECT_SPOTIFY_ENABLE:
             _BaseSetting(False, _Section.AUDIO, False, lambda s: s == 'True'),

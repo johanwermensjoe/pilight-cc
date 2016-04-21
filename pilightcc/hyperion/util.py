@@ -14,7 +14,7 @@ class HyperionError(BaseError):
             :param msg: the error message
             :type msg: str
         """
-        super(HyperionError, self).__init__(self, msg)
+        super(HyperionError, self).__init__(msg)
 
 
 class HyperionConnector(object):
@@ -52,6 +52,7 @@ class HyperionConnector(object):
             try:
                 # Connect socket to the provided server.
                 self._socket.connect((self.__ip_address, self.__port))
+                self._connected = True
             except error:
                 raise HyperionError("Connection failed")
 
