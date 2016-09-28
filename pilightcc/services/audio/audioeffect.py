@@ -1,9 +1,9 @@
 """ Audio Effect service module. """
 
 # Service
-from services.service import BaseService
-from services.service import ServiceLauncher
-from threading import Condition
+from pilightcc.services.service import BaseService
+from pilightcc.services.service import ServiceLauncher
+from threading import Lock, Event
 
 # Application
 from pilightcc.services.audio.audioanalyzer import AudioAnalyser, \
@@ -24,18 +24,21 @@ class AudioEffectService(BaseService):
         ERROR = 2
 
     __ERROR_DELAY = 5
-    __AUDIO_ANALYSER_TIMEOUT = 1
+    __AUDIO_ANALYSER_TIMEOUT = 5
     __IMAGE_DURATION = 500
 
     __EFFECT_MIN_AMP = -60
     __EFFECT_MAX_AMP = -20
+
+    __PULSE_AUDIO_DEVICE = "alsa_output.usb-Propellerhead_Balance_0001002008080-00.analog-stereo.monitor"
 
     def __init__(self, port):
         """ Constructor
         """
         super(AudioEffectService, self).__init__(port, True)
         self._update_state(AudioEffectService.StateValue.OK)
-        self.__cond = Condition()
+        self.__lock = Lock()
+        self._new_data_event = Event()
         self.__hyperion_connector = None
         self.__audio_analyser = None
 
@@ -43,7 +46,7 @@ class AudioEffectService(BaseService):
         hyperion_unit = self._register_setting_unit(
             self.__update_hyperion_connector)
         hyperion_unit.add('_ip_address', Setting.HYPERION_IP_ADDRESS)
-        hyperion_unit.add('_port', Setting.HYPERION_PORT)
+        hyperion_unit.add('_port', Setting.HYPERION_JSON_PORT)
 
         audio_effect_unit = self._register_setting_unit(
             self.__update_audio_analyser)
@@ -82,12 +85,14 @@ class AudioEffectService(BaseService):
         if self.__audio_analyser is not None:
             self.__audio_analyser.stop()
         # TODO Args
-        self.__audio_analyser = AudioAnalyser()
+        self.__audio_analyser = AudioAnalyser(self.__PULSE_AUDIO_DEVICE,
+                                              self.__update_audio_data,
+                                              interval=50)
 
     def __update_audio_data(self, data):
-        with self.__cond:
-            self.__data = data
-            self.__cond.notify()
+        with self.__lock:
+            self._data = data
+            self._new_data_event.set()
 
     def _run_service(self):
         try:
@@ -98,23 +103,27 @@ class AudioEffectService(BaseService):
 
             # Capture audio.
             if not self.__audio_analyser.is_running():
+                print("Starting AudioAnalyser")
                 self.__audio_analyser.start()
 
-            with self.__cond:
-                if self.__cond.wait(
-                        AudioEffectService.__AUDIO_ANALYSER_TIMEOUT):
-                    # Only update if not timed out.
-                    data = self.__data
-                else:
-                    # AudioAnalyser is not sending updates.
-                    self.__audio_analyser.stop()
-                    raise AudioAnalyserError("AudioAnalyser error")
+            if self._new_data_event.wait(
+                    AudioEffectService.__AUDIO_ANALYSER_TIMEOUT):
+                # Only update if not timed out.
+                with self.__lock:
+                    data = self._data
+                    self._new_data_event.clear()
 
-            # Calculate send_effect frame.
-            led_data = self.__calculate_effect(data)
+                # Calculate send_effect frame.
+                led_data = self.__calculate_effect(data)
 
-            # Send message.
-            self.__hyperion_connector.send_colors(led_data, self._proiority)
+                # Send message.
+                self.__hyperion_connector.send_colors(led_data, self._priority)
+            else:
+                print("Error!")
+                # AudioAnalyser is not sending updates.
+                self.__audio_analyser.stop()
+                raise AudioAnalyserError("AudioAnalyser error")
+
         except (HyperionError, AudioAnalyserError) as err:
             self._update_state(AudioEffectService.StateValue.ERROR, err.msg)
             self._safe_delay(AudioEffectService.__ERROR_DELAY)
@@ -153,16 +162,17 @@ class AudioEffectService(BaseService):
 
     def __join_channel_effects(self, left_ch, right_ch):
         # Pre calculate some led counts.
-        channel_count_bottom = self._led_count_bottom // 2
         channel_count_top = self._led_count_bottom // 2
+        channel_count_bottom = self._led_count_bottom // 2
 
         # Piece together the channels.
-        joined = left_ch
+        joined = []
+        joined += left_ch
         if channel_count_top * 2 < self._led_count_top:
-            joined.append([0, 0, 0])
-        joined.append(right_ch.reverse())
+            joined += [[0, 0, 0]]
+        joined += right_ch[::-1]
         if channel_count_bottom * 2 < self._led_count_bottom:
-            joined.append([0, 0, 0])
+            joined += [[0, 0, 0]]
 
         # Calculate the starting index.
         start = channel_count_bottom
@@ -175,33 +185,28 @@ class AudioEffectService(BaseService):
 
         # Reorder the joined data.
         reordered = joined[start:]
-        reordered.append(joined[:start])
+        reordered += joined[:start]
+        # return reordered
         return AudioEffectService.convert_effect_to_bytearray(reordered)
 
     @staticmethod
     def prepare_audio_channel(channel_data, channel_width, min_amp, max_amp):
         data = channel_data[:channel_width]
-        AudioEffectService.compress_audio(data, min_amp, max_amp)
-        return data
+        return AudioEffectService.compress_audio(data, min_amp, max_amp)
 
     @staticmethod
     def compress_audio(data, min_amp, max_amp):
         diff = max_amp - min_amp
-        for i, v in enumerate(data):
-            if v < min_amp:
-                data[i] = min_amp
-            elif v > max_amp:
-                data[i] = max_amp
-            data[i] /= diff
-        return data
+        return [(max(min_amp, min(max_amp, v)) - min_amp) / diff for v in
+                data]
 
     @staticmethod
     def create_basic_color_effect(comp_data, color):
-        return [[c * v for c in color] for v in comp_data]
+        return [[int(round(c * v)) for c in color] for v in comp_data]
 
     @staticmethod
     def convert_effect_to_bytearray(effect_data):
-        return bytearray([c for color in effect_data for c in color])
+        return [c for color in effect_data for c in color]
 
 
 if __name__ == '__main__':

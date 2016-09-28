@@ -96,8 +96,8 @@ class HyperionJson(HyperionConnector):
     def send_colors(self, colors, priority):
         """
         Set individual send_colors for the LEDs or a single color.
-            :param colors: bytearray of the led data (r,g,b) * led count
-            :type colors: bytearray
+            :param colors: list of the flattened led data (r,g,b) * led count
+            :type colors: list
             :param priority: the priority
             :type priority: int
             :return:
@@ -106,8 +106,7 @@ class HyperionJson(HyperionConnector):
         .. Note:: If only one set of (r,g,b) values are given
                   the color will apply to all LEDs.
         """
-        f_colors = ",".join([repr(v) for v in colors])
         self.__send_json({HyperionJson._Field.COMMAND:
                           HyperionJson._Command.COLOR,
                           HyperionJson._Field.PRIORITY: priority,
-                          HyperionJson._Field.COLOR: f_colors})
+                          HyperionJson._Field.COLOR: colors})

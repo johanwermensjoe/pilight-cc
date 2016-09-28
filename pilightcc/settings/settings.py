@@ -20,7 +20,8 @@ class Setting(object):
     CAPTURE_FRAME_RATE = 'cFrameRate'
 
     HYPERION_IP_ADDRESS = 'hIpAddress'
-    HYPERION_PORT = 'hPort'
+    HYPERION_JSON_PORT = 'hJSONPort'
+    HYPERION_PROTO_PORT = 'hProtoPort'
 
     LED_COUNT_TOP = 'lCountTop'
     LED_COUNT_BOTTOM = 'lCountBottom'
@@ -77,8 +78,10 @@ class SettingsManager:
 
         Setting.HYPERION_IP_ADDRESS:
             _BaseSetting("127.0.0.1", _Section.HYPERION, False, str),
-        Setting.HYPERION_PORT:
-            _BaseSetting(19945, _Section.HYPERION, False, int),
+        Setting.HYPERION_JSON_PORT:
+            _BaseSetting(19444, _Section.HYPERION, False, int),
+        Setting.HYPERION_PROTO_PORT:
+            _BaseSetting(19445, _Section.HYPERION, False, int),
         Setting.LED_COUNT_TOP:
             _BaseSetting(30, _Section.HYPERION, False, int),
         Setting.LED_COUNT_BOTTOM:
@@ -93,7 +96,7 @@ class SettingsManager:
         Setting.AUDIO_EFFECT_SPOTIFY_ENABLE:
             _BaseSetting(False, _Section.AUDIO, False, lambda s: s == 'True'),
         Setting.AUDIO_EFFECT_PRIORITY:
-            _BaseSetting(800, _Section.AUDIO, False, int),
+            _BaseSetting(100, _Section.AUDIO, False, int),
         Setting.AUDIO_EFFECT_FRAME_RATE:
             _BaseSetting(60, _Section.AUDIO, False, int)
     }

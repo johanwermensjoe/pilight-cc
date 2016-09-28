@@ -11,12 +11,6 @@ from gi.repository import Gst, GObject
 
 from threading import Thread, Lock, current_thread
 
-PULSE_AUDIO_DEVICE = "alsa_output.pci-0000_00_1b.0.analog-stereo.monitor"
-
-
-# PULSE_AUDIO_DEVICE = "alsa_output.usb-Propellerhead_Balance_0001002008080-00.analog-stereo.monitor"
-
-
 class AudioAnalyser:
     __SPECTRUM_NAME = "spectrum"
     __SPECTRUM_MAGNITUDE = 'magnitude'
@@ -313,8 +307,9 @@ def print_data(data):
     #     print i
     # print(data)
     from sys import stdout
-    print(current_thread())
-    stdout.write("Average amplitude: %d%%  dB \r" % (data[0][1]))
+    # print(current_thread())
+    # print("Average amplitude: {}  dB".format(data[0][1])),
+    stdout.write("\rAverage amplitude: %d%%  dB" % (data[0][1]))
     stdout.flush()
 
 
@@ -333,16 +328,20 @@ def print_data(data):
 #     print(i / 5.0)
 
 if __name__ == '__main__':
-    print(current_thread())
+    # print(current_thread())
     aa = AudioAnalyser(PULSE_AUDIO_DEVICE, print_data, bands=128,
                        multichannel=False, interval=100)
+    aa.start()
     from time import sleep
 
-    aa.start()
-    sleep(2)
-    aa.stop()
-    print("\nStoppy\n")
-    sleep(1)
-    aa.start()
-    sleep(2)
-    aa.stop()
+    while True:
+        sleep(1)
+
+    # aa.start()
+    # sleep(2)
+    # aa.stop()
+    # print("\nStoppy\n")
+    # sleep(1)
+    # aa.start()
+    # sleep(2)
+    # aa.stop()

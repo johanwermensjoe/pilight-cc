@@ -44,7 +44,7 @@ class CaptureService(BaseService):
         hyperion_unit = self._register_setting_unit(
             self.__update_hyperion_connector)
         hyperion_unit.add('_ip_address', Setting.HYPERION_IP_ADDRESS)
-        hyperion_unit.add('_port', Setting.HYPERION_PORT)
+        hyperion_unit.add('_port', Setting.HYPERION_PROTO_PORT)
 
         capture_unit = self._register_setting_unit(self.__update_timer)
         capture_unit.add('_frame_rate', Setting.CAPTURE_FRAME_RATE)
@@ -84,22 +84,22 @@ class CaptureService(BaseService):
     def _run_service(self):
         self.__delay_timer.start()
 
-        try:
-            # Check that an hyperion connection is available.
-            if not self.__hyperion_connector.is_connected():
-                self.__hyperion_connector.connect()
-                self._update_state(CaptureService.StateValue.OK)
+        # try:
+        # Check that an hyperion connection is available.
+        if not self.__hyperion_connector.is_connected():
+            self.__hyperion_connector.connect()
+            self._update_state(CaptureService.StateValue.OK)
 
-            # Capture frame.
-            self.__update_pixel_buffer()
+        # Capture frame.
+        self.__update_pixel_buffer()
 
-            # Send to hyperion server.
-            self.__hyperion_connector.send_image(
-                self._scale_width, self._scale_height, self.__data.get_pixels(),
-                self._priority, CaptureService.__IMAGE_DURATION)
-        except HyperionError as err:
-            self._update_state(CaptureService.StateValue.ERROR, err.msg)
-            self._safe_delay(CaptureService.__ERROR_DELAY)
+        # Send to hyperion server.
+        self.__hyperion_connector.send_image(
+            self._scale_width, self._scale_height, self.__data.get_pixels(),
+            self._priority, CaptureService.__IMAGE_DURATION)
+        # except HyperionError as err:
+        #     self._update_state(CaptureService.StateValue.ERROR, err.msg)
+        #     self._safe_delay(CaptureService.__ERROR_DELAY)
 
         # Wait until next run.
         self.__delay_timer.delay()

@@ -7,7 +7,7 @@ from threading import Thread, Lock
 from time import sleep, clock
 
 # Communication
-from zmq import PAIR, NOBLOCK, ZMQError, Context
+import zmq
 
 # Initialization
 from argparse import ArgumentParser
@@ -52,9 +52,10 @@ class BaseService(object):
         - port      : the 0mq communication port
         """
         # Setup the 0mq channel.
-        self.__context = Context()
-        self.__socket = self.__context.socket(PAIR)
-        print "Service started on: tcp://127.0.0.1:{0}".format(port)
+        self.__context = zmq.Context()
+        self.__socket = self.__context.socket(zmq.PAIR)
+        print "Service (pyzmq version: {}) started on: tcp://127.0.0.1:{}"\
+            .format(zmq.pyzmq_version(), port)
         self.__socket.connect("{0}:{1}".format(
             BaseService.__HOST_ADDRESS, port))
 
@@ -229,7 +230,7 @@ class ServiceLauncher(object):
                             help="communication port")
         args = parser.parse_args()
 
-        print "Service started"
+        print "Service started: {}".format(name)
         service(args.port).run()
         print "Service terminated"
 
@@ -242,10 +243,11 @@ class ServiceConnector(object):
 
     def __init__(self, spawn_monitor=False):
         # Setup the 0mq channel to the started service.
-        self.__context = Context()
-        self.__socket = self.__context.socket(PAIR)
+        self.__context = zmq.Context()
+        self.__socket = self.__context.socket(zmq.PAIR)
         self.__port = self.__socket.bind_to_random_port(
             ServiceConnector.__HOST_ADDRESS)
+        print "Connector bound to port " + str(self.__port)
 
         # Setup state access.
         self.__state_lock = Lock()
@@ -298,6 +300,7 @@ class ServiceConnector(object):
         Can be called from any process.
         - settings  : the updated settings dictionary
         """
+        print("Sending settings")
         ServiceMessage(ServiceMessage.Type.SETTINGS, settings).send(
             self.__socket)
 
@@ -320,6 +323,7 @@ class ServiceMessage(object):
         return {'type': self.type, 'data': self.data}
 
     def send(self, zmq_socket):
+        #print("Sending: {}".format(self.__to_msg()))
         zmq_socket.send_json(self.__to_msg())
 
     @classmethod
@@ -337,8 +341,8 @@ class ServiceMessage(object):
     @classmethod
     def check_for_message(cls, zmq_socket):
         try:
-            return cls.from_message(zmq_socket.recv_json(NOBLOCK))
-        except ZMQError:
+            return cls.from_message(zmq_socket.recv_json(zmq.NOBLOCK))
+        except zmq.ZMQError:
             return None
 
 
