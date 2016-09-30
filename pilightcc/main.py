@@ -1,7 +1,5 @@
 from gi import require_version
 
-from hyperion.hypproto import HyperionProto
-
 require_version('Gtk', '3.0')
 from gi.repository import Gtk
 

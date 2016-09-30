@@ -1,7 +1,7 @@
 """ Service module. """
 
 # Multiprocessing
-from threading import Thread, Lock
+from threading import Thread, Lock, Event
 
 # Delay
 from time import sleep, clock
@@ -54,9 +54,9 @@ class BaseService(object):
         # Setup the 0mq channel.
         self.__context = zmq.Context()
         self.__socket = self.__context.socket(zmq.PAIR)
-        print "Service (pyzmq version: {}) started on: tcp://127.0.0.1:{}"\
-            .format(zmq.pyzmq_version(), port)
-        self.__socket.connect("{0}:{1}".format(
+        print "{}: (pyzmq version: {}) started on: tcp://127.0.0.1:{}"\
+            .format(self.__class__.__name__, zmq.pyzmq_version(), port)
+        self.__socket.connect("{}:{}".format(
             BaseService.__HOST_ADDRESS, port))
 
         # Initialize state.
@@ -107,7 +107,8 @@ class BaseService(object):
         - msg   : the message (None is allowed)
         """
         if msg is not None:
-            print "Message received: {0} - {1}".format(msg.type, msg.data)
+            print("{}: Message received: {} - {}"
+                  .format(self.__class__.__name__, msg.type, msg.data))
             if msg.type == ServiceMessage.Type.ENABLE:
                 # Enable/Disable if state changed.
                 if self.__enabled != msg.data:
@@ -145,7 +146,8 @@ class BaseService(object):
         # Only update if new state is different.
         new_state = ServiceState(self.__enabled, self.__shutting_down, value,
                                  msg)
-        print "State updated: {0}".format(new_state)
+        print("{}: State updated: {}"
+              .format(self.__class__.__name__, new_state))
         if self._state != new_state:
             self._state = new_state
             self._send_message(ServiceMessage(ServiceMessage.Type.STATE,
@@ -230,9 +232,9 @@ class ServiceLauncher(object):
                             help="communication port")
         args = parser.parse_args()
 
-        print "Service started: {}".format(name)
+        print("Service: Started: {}".format(name))
         service(args.port).run()
-        print "Service terminated"
+        print("Service: Terminated: {}".format(name))
 
 
 class ServiceConnector(object):
@@ -247,10 +249,11 @@ class ServiceConnector(object):
         self.__socket = self.__context.socket(zmq.PAIR)
         self.__port = self.__socket.bind_to_random_port(
             ServiceConnector.__HOST_ADDRESS)
-        print "Connector bound to port " + str(self.__port)
+        print "Manager: Connector bound to port " + str(self.__port)
 
         # Setup state access.
         self.__state_lock = Lock()
+        self.__state_update_event = Event()
         self.__state = ServiceState(False, False)
 
         # Spawn a monitor thread.
@@ -272,7 +275,15 @@ class ServiceConnector(object):
     def __update_state(self, data):
         with self.__state_lock:
             self.__state = ServiceState.from_data(data)
-            print "State received: {0}".format(self.__state)
+            self.__state_update_event.set()
+            print "Manager: State received: {0}".format(self.__state)
+
+    def wait_for_update(self, timeout=None):
+        if self.__state_update_event.wait(timeout):
+            self.__state_update_event.clear()
+            return True
+        else:
+            return False
 
     def get_state(self):
         with self.__state_lock:
@@ -284,9 +295,11 @@ class ServiceConnector(object):
 
     def shutdown(self):
         """ Signal the service to shutdown.
-        Can be called from any process.
+        Can be called from any process. Awaits confirmation from service.
         """
         ServiceMessage(ServiceMessage.Type.KILL).send(self.__socket)
+        while not self.__state.is_shutting_down() and self.wait_for_update():
+            pass  # TODO timeout unresponsive procs.
 
     def enable(self, enable):
         """ Signal the service to be enabled/disabled.
@@ -300,7 +313,6 @@ class ServiceConnector(object):
         Can be called from any process.
         - settings  : the updated settings dictionary
         """
-        print("Sending settings")
         ServiceMessage(ServiceMessage.Type.SETTINGS, settings).send(
             self.__socket)
 
@@ -323,7 +335,6 @@ class ServiceMessage(object):
         return {'type': self.type, 'data': self.data}
 
     def send(self, zmq_socket):
-        #print("Sending: {}".format(self.__to_msg()))
         zmq_socket.send_json(self.__to_msg())
 
     @classmethod

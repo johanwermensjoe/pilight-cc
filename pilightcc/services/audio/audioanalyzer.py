@@ -329,6 +329,7 @@ def print_data(data):
 
 if __name__ == '__main__':
     # print(current_thread())
+    PULSE_AUDIO_DEVICE = "alsa_output.usb-Propellerhead_Balance_0001002008080-00.analog-stereo.monitor"
     aa = AudioAnalyser(PULSE_AUDIO_DEVICE, print_data, bands=128,
                        multichannel=False, interval=100)
     aa.start()
