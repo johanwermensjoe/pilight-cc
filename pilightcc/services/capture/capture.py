@@ -41,18 +41,16 @@ class CaptureService(BaseService):
         self.__delay_timer = DelayTimer()
 
         # Register settings.
-        hyperion_unit = self._register_setting_unit(
-            self.__update_hyperion_connector)
-        hyperion_unit.add('_ip_address', Setting.HYPERION_IP_ADDRESS)
-        hyperion_unit.add('_port', Setting.HYPERION_PROTO_PORT)
+        self._register_settings_unit([Setting.HYPERION_IP_ADDRESS,
+                                      Setting.HYPERION_PROTO_PORT],
+                                     self.__update_hyperion_connector)
 
-        capture_unit = self._register_setting_unit(self.__update_timer)
-        capture_unit.add('_frame_rate', Setting.CAPTURE_FRAME_RATE)
+        self._register_settings_unit([Setting.CAPTURE_FRAME_RATE],
+                                     self.__update_timer)
 
-        std_unit = self._register_setting_unit()
-        std_unit.add('_scale_width', Setting.CAPTURE_SCALE_WIDTH)
-        std_unit.add('_scale_height', Setting.CAPTURE_SCALE_HEIGHT)
-        std_unit.add('_priority', Setting.CAPTURE_PRIORITY)
+        self._register_settings_unit([Setting.CAPTURE_SCALE_WIDTH,
+                                      Setting.CAPTURE_SCALE_HEIGHT,
+                                      Setting.CAPTURE_PRIORITY])
 
     def _setup(self):
         self.__update_hyperion_connector()
@@ -70,36 +68,42 @@ class CaptureService(BaseService):
         if self.__hyperion_connector is not None:
             self.__hyperion_connector.disconnect()
         self.__hyperion_connector = HyperionProto(
-            self._ip_address, self._port)
+            self._get_setting(Setting.HYPERION_IP_ADDRESS),
+            self._get_setting(Setting.HYPERION_PROTO_PORT))
 
     def __update_timer(self):
-        self.__delay_timer.set_delay(1.0 / self._frame_rate)
+        self.__delay_timer.set_delay(
+            1.0 / self._get_setting(Setting.CAPTURE_FRAME_RATE))
 
     def __update_pixel_buffer(self):
         self.__data = self.scale_pixel_buffer(
             self.get_pixel_buffer(),
-            self._scale_width,
-            self._scale_height)
+            self._get_setting(Setting.CAPTURE_SCALE_WIDTH),
+            self._get_setting(Setting.CAPTURE_SCALE_HEIGHT))
 
     def _run_service(self):
         self.__delay_timer.start()
 
-        # try:
-        # Check that an hyperion connection is available.
-        if not self.__hyperion_connector.is_connected():
-            self.__hyperion_connector.connect()
-            self._update_state(CaptureService.StateValue.OK)
+        try:
+            # Check that an hyperion connection is available.
+            if not self.__hyperion_connector.is_connected():
+                self.__hyperion_connector.connect()
+                self._update_state(CaptureService.StateValue.OK)
 
-        # Capture frame.
-        self.__update_pixel_buffer()
+            # Capture frame.
+            self.__update_pixel_buffer()
 
-        # Send to hyperion server.
-        self.__hyperion_connector.send_image(
-            self._scale_width, self._scale_height, self.__data.get_pixels(),
-            self._priority, CaptureService.__IMAGE_DURATION)
-        # except HyperionError as err:
-        #     self._update_state(CaptureService.StateValue.ERROR, err.msg)
-        #     self._safe_delay(CaptureService.__ERROR_DELAY)
+            # Send to hyperion server.
+            self.__hyperion_connector.send_image(
+                self._get_setting(Setting.CAPTURE_SCALE_WIDTH),
+                self._get_setting(Setting.CAPTURE_SCALE_HEIGHT),
+                self.__data.get_pixels(),
+                self._get_setting(Setting.CAPTURE_PRIORITY),
+                CaptureService.__IMAGE_DURATION)
+
+        except HyperionError as err:
+            self._update_state(CaptureService.StateValue.ERROR, err.msg)
+            self._safe_delay(CaptureService.__ERROR_DELAY)
 
         # Wait until next run.
         self.__delay_timer.delay()

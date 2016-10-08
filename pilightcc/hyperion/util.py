@@ -1,6 +1,6 @@
 """ Hyperion utilities module. """
 
-from socket import socket, AF_INET, SOCK_STREAM, error
+import socket
 
 from pilightcc.util.error import BaseError
 
@@ -46,14 +46,14 @@ class HyperionConnector(object):
         # Disconnect if previously connected.
         if not self._connected:
             # Create a new socket.
-            self._socket = socket(AF_INET, SOCK_STREAM)
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._socket.settimeout(self.__timeout)
 
             try:
                 # Connect socket to the provided server.
                 self._socket.connect((self.__ip_address, self.__port))
                 self._connected = True
-            except error:
+            except socket.error:
                 raise HyperionError("Connection failed")
 
     def disconnect(self):

@@ -1,8 +1,8 @@
 """ Hyperion Protocol Buffer communication module. """
 
 # Networking
-from socket import error
-from struct import pack, unpack
+import socket
+import struct
 
 # Protocol buffer message
 from pilightcc.hyperion.util import HyperionError, HyperionConnector
@@ -37,12 +37,12 @@ class HyperionProto(HyperionConnector):
         try:
             # Send the message.
             binary_request = message.SerializeToString()
-            binary_size = pack(">I", len(binary_request))
+            binary_size = struct.pack(">I", len(binary_request))
             self._socket.sendall(binary_size)
             self._socket.sendall(binary_request)
 
             # Receive a reply from Hyperion.
-            size = unpack(">I", self._socket.recv(4))[0]
+            size = struct.unpack(">I", self._socket.recv(4))[0]
             reply = HyperionReply()
             reply.ParseFromString(self._socket.recv(size))
 
@@ -50,7 +50,7 @@ class HyperionProto(HyperionConnector):
             if not reply.success:
                 self._connected = False
                 raise HyperionError("Hyperion server error: " + reply.error)
-        except error:
+        except socket.error:
             self._connected = False
             raise HyperionError("Hyperion server connection error")
 

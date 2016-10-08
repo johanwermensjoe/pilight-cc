@@ -4,7 +4,7 @@
 from threading import Thread, Lock, Event
 
 # Delay
-from time import sleep, clock
+import time
 
 # Communication
 import zmq
@@ -19,28 +19,6 @@ class BaseService(object):
     Implementations for _on_shutdown and _handle_message are optional.
     State codes 0-5 are reserved for BaseService.
     """
-
-    class __SettingUnit(object):
-        def __init__(self, owner, callback=None):
-            self.__owner = owner
-            self.__callback = callback
-            self.__id_key_pairs = []
-
-        def add(self, id_, key):
-            self.__id_key_pairs.append((id_, key))
-            setattr(self.__owner, id_, None)
-
-        def has_changes(self, settings):
-            for (prop, key) in self.__id_key_pairs:
-                if getattr(self.__owner, prop) != settings[key]:
-                    return True
-            return False
-
-        def update(self, settings):
-            for (prop, key) in self.__id_key_pairs:
-                setattr(self.__owner, prop, settings[key])
-            if self.__callback is not None:
-                self.__callback()
 
     # The delay interval for shutdown monitoring, safe delays.
     __SAFE_DELAY_INCREMENT = 0.5
@@ -73,16 +51,14 @@ class BaseService(object):
             self.__initialized = False
 
         # Setup setting handling.
-        self.__setting_units = []
+        self.__setting_store = SettingsStore()
 
     def __del__(self):
         self.__socket.close()
         self.__context.destroy()
 
     def __load_settings(self, settings):
-        for setting_unit in self.__setting_units:
-            if setting_unit.has_changes(settings):
-                setting_unit.update(settings)
+        self.__setting_store.update(settings)
 
     def __service_setup(self):
         self._setup()
@@ -129,10 +105,14 @@ class BaseService(object):
             else:
                 self._handle_message(msg)
 
-    def _register_setting_unit(self, callback=None):
-        setting_unit = BaseService.__SettingUnit(self, callback)
-        self.__setting_units.append(setting_unit)
-        return setting_unit
+    def _register_settings_unit(self, keys, callback=None):
+        self.__setting_store.add_unit(keys, callback)
+
+    def _get_setting(self, key):
+        return self.__setting_store.get_setting(key)
+
+    def _get_settings(self):
+        return self.__setting_store.get_settings()
 
     def _send_message(self, msg):
         msg.send(self.__socket)
@@ -156,7 +136,7 @@ class BaseService(object):
     def _safe_delay(self, delay):
         while delay > BaseService.__SAFE_DELAY_INCREMENT:
             # Delay for ony a small increment.
-            sleep(BaseService.__SAFE_DELAY_INCREMENT)
+            time.sleep(BaseService.__SAFE_DELAY_INCREMENT)
             delay -= BaseService.__SAFE_DELAY_INCREMENT
 
             # Check and handle any messages.
@@ -165,7 +145,7 @@ class BaseService(object):
             if self.__shutting_down:
                 return
         # Sleep for any remaining delay.
-        sleep(delay)
+        time.sleep(delay)
 
     def run(self):
         """ Service execution method.
@@ -218,6 +198,34 @@ class BaseService(object):
         and enable flag checked before every run.
         """
         raise NotImplementedError("Please implement this method")
+
+
+class SettingsStore(object):
+    def __init__(self):
+        self.__settings = {}
+        self.__units = []
+
+    def add_unit(self, keys, callback=None):
+        self.__units.append((keys, callback))
+        for key in keys:
+            self.__settings[key] = None
+
+    def get_setting(self, key):
+        return self.__settings[key]
+
+    def get_settings(self):
+        return self.__settings
+
+    def update(self, settings):
+        for key, value in settings.iteritems():
+            if key in self.__settings and self.__settings[key] != value:
+                # Update the value.
+                self.__settings[key] = value
+
+                # Check units if callback is needed for the changed setting.
+                for keys, callback in self.__units:
+                    if key in keys and callback is not None:
+                        callback()
 
 
 class ServiceLauncher(object):
@@ -435,11 +443,11 @@ class DelayTimer(object):
     def start(self):
         """ Set the start of the execution of the caller process.
         """
-        self.__last_time = clock()
+        self.__last_time = time.clock()
 
     def delay(self):
         """ Delay the calling process for the time left of the delay.
         """
-        delta = self.__delay - (clock() - self.__last_time)
+        delta = self.__delay - (time.clock() - self.__last_time)
         if delta > 0:
-            sleep(delta)
+            time.sleep(delta)

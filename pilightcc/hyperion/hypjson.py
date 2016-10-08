@@ -1,6 +1,6 @@
 """ Hyperion JSON communication module. """
-from _socket import error
-from json import dumps
+import socket
+import json
 
 from pilightcc.hyperion.util import HyperionError, HyperionConnector
 
@@ -20,6 +20,7 @@ class HyperionJson(HyperionConnector):
         COMMAND = 'command'
         PRIORITY = 'priority'
         COLOR = 'color'
+        DURATION = 'duration'
         EFFECT = 'send_effect'
         EFFECT_NAME = 'name'
         EFFECT_ARGS = 'args'
@@ -45,8 +46,8 @@ class HyperionJson(HyperionConnector):
             :raises HyperionError
         """
         try:
-            self._socket.sendall(dumps(fields) + "\n")
-        except error:
+            self._socket.sendall(json.dumps(fields) + "\n")
+        except socket.error:
             self._connected = False
             raise HyperionError("Connection failed")
 
@@ -93,13 +94,15 @@ class HyperionJson(HyperionConnector):
                               HyperionJson._Field.EFFECT_ARGS: args
                           }})
 
-    def send_colors(self, colors, priority):
+    def send_colors(self, colors, priority, duration=-1):
         """
         Set individual send_colors for the LEDs or a single color.
             :param colors: list of the flattened led data (r,g,b) * led count
             :type colors: list
             :param priority: the priority
             :type priority: int
+            :param duration: the display duration in milliseconds (default: -1)
+            :type duration: int
             :return:
             :raises: HyperionError
 
@@ -109,4 +112,5 @@ class HyperionJson(HyperionConnector):
         self.__send_json({HyperionJson._Field.COMMAND:
                           HyperionJson._Command.COLOR,
                           HyperionJson._Field.PRIORITY: priority,
-                          HyperionJson._Field.COLOR: colors})
+                          HyperionJson._Field.COLOR: colors,
+                          HyperionJson._Field.DURATION: duration})

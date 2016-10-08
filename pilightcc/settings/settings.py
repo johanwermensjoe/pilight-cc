@@ -5,7 +5,7 @@ from threading import RLock
 from threading import Lock
 
 # Config parsing
-from os.path import exists
+from os import path
 from ConfigParser import RawConfigParser
 from ConfigParser import NoOptionError
 from ConfigParser import NoSectionError
@@ -29,9 +29,10 @@ class Setting(object):
     LED_START_CORNER = 'lStartCorner'
     LED_DIRECTION = 'lDirection'
 
-    AUDIO_EFFECT_SPOTIFY_ENABLE = 'aeSpotifyAutoEnable'
-    AUDIO_EFFECT_PRIORITY = 'aePriority'
-    AUDIO_EFFECT_FRAME_RATE = 'aeFrameRate'
+    AUDIO_OUTPUT_DEVICE_NAME = 'aOutputDeviceName'
+    AUDIO_SPOTIFY_ENABLE = 'aSpotifyAutoEnable'
+    AUDIO_PRIORITY = 'aPriority'
+    AUDIO_FRAME_RATE = 'aFrameRate'
 
 
 class LedCorner(object):
@@ -82,6 +83,7 @@ class SettingsManager:
             _BaseSetting(19444, _Section.HYPERION, False, int),
         Setting.HYPERION_PROTO_PORT:
             _BaseSetting(19445, _Section.HYPERION, False, int),
+
         Setting.LED_COUNT_TOP:
             _BaseSetting(30, _Section.HYPERION, False, int),
         Setting.LED_COUNT_BOTTOM:
@@ -93,11 +95,13 @@ class SettingsManager:
         Setting.LED_DIRECTION:
             _BaseSetting(LedDir.CCW, _Section.HYPERION, False, str),
 
-        Setting.AUDIO_EFFECT_SPOTIFY_ENABLE:
+        Setting.AUDIO_OUTPUT_DEVICE_NAME:
+            _BaseSetting("", _Section.AUDIO, False, str),
+        Setting.AUDIO_SPOTIFY_ENABLE:
             _BaseSetting(False, _Section.AUDIO, False, lambda s: s == 'True'),
-        Setting.AUDIO_EFFECT_PRIORITY:
+        Setting.AUDIO_PRIORITY:
             _BaseSetting(100, _Section.AUDIO, False, int),
-        Setting.AUDIO_EFFECT_FRAME_RATE:
+        Setting.AUDIO_FRAME_RATE:
             _BaseSetting(60, _Section.AUDIO, False, int)
     }
 
@@ -151,7 +155,7 @@ class SettingsManager:
         print "Reading settings"
         # Parse config file.
         config = RawConfigParser(allow_no_value=True)
-        if exists(SettingsManager._CONFIG_PATH):
+        if path.exists(SettingsManager._CONFIG_PATH):
             config.read(SettingsManager._CONFIG_PATH)
 
         # Make sure the required values are set.
