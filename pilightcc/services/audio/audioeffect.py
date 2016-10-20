@@ -1,12 +1,12 @@
 """ Audio Effect module. """
 
-from pilightcc.services.audio.audioanalyzer import AudioAnalyser
+from pilightcc.services.audio.audioanalyzer import LevelAudioAnalyser
 from pilightcc.settings.settings import Setting, LedCorner, LedDir
 
 
 class BaseAudioEffect(object):
     _STD_MULTI_CH = True
-    _STD_INTERVAL = 50
+    _STD_INTERVAL = 20
 
     _PULSE_AUDIO_DEVICE = "alsa_output.usb-Propellerhead_Balance_0001002008080-00.analog-stereo.monitor"  # TODO Remove
 
@@ -92,85 +92,82 @@ class BaseAudioEffect(object):
         raise NotImplementedError("Please implement this method")
 
 
-class SpectrumEffect(BaseAudioEffect):
-    _EFFECT_MIN_AMP = -30
-    _EFFECT_MAX_AMP = 0
-    _EFFECT_DECAY = 0.3
-
-    def __init__(self, settings):
-        super(SpectrumEffect, self).__init__(settings)
-        self.__prev_left_ch = None
-        self.__prev_right_ch = None
-
-    def reset(self):
-        self.__prev_left_ch = None
-        self.__prev_right_ch = None
-
-    def get_new_analyser(self, callback):
-        return AudioAnalyser(self._PULSE_AUDIO_DEVICE, callback,
-                             mode=AudioAnalyser.Mode.SPECTRUM,
-                             interval=self._STD_INTERVAL,
-                             multichannel=self._STD_MULTI_CH,
-                             threshold=self._EFFECT_MIN_AMP,
-                             cutoff=self._EFFECT_MAX_AMP)
-
-    def get_effect(self, data):
-        leds_per_channel = (self._settings[Setting.LED_COUNT_TOP] // 2 +
-                            self._settings[Setting.LED_COUNT_BOTTOM] // 2 +
-                            self._settings[Setting.LED_COUNT_SIDE])
-
-        # Divide into two channels and create effects.
-        left_ch = self._normalize_data(
-            data[0][:leds_per_channel], self._EFFECT_MIN_AMP,
-            self._EFFECT_MAX_AMP)
-
-        if self.__prev_left_ch is not None:
-            left_ch = self._apply_linear_decay_effect(
-                left_ch, self.__prev_left_ch,
-                self._EFFECT_DECAY / self._settings[
-                    Setting.AUDIO_FRAME_RATE])
-        self.__prev_left_ch = left_ch
-
-        left_ch_eff = self._create_basic_color_effect(
-            left_ch, [0, 0, 255])
-
-        # Second channel if needed.
-        if len(data) > 1:
-            right_ch = self._normalize_data(
-                data[1][:leds_per_channel], self._EFFECT_MIN_AMP,
-                self._EFFECT_MAX_AMP)
-
-            if self.__prev_right_ch is not None:
-                right_ch = self._apply_linear_decay_effect(
-                    right_ch, self.__prev_right_ch,
-                    self._EFFECT_DECAY / self._settings[
-                        Setting.AUDIO_FRAME_RATE])
-            self.__prev_right_ch = right_ch
-
-            right_ch_eff = self._create_basic_color_effect(
-                right_ch, [0, 0, 255])
-        else:
-            right_ch_eff = left_ch_eff
-
-        # Join channels correctly.
-        return self._join_channel_effects(left_ch_eff, right_ch_eff)
+# class SpectrumEffect(BaseAudioEffect):
+#     _EFFECT_MIN_AMP = -30
+#     _EFFECT_MAX_AMP = 0
+#     _EFFECT_DECAY = 0.3
+#
+#     def __init__(self, settings):
+#         super(SpectrumEffect, self).__init__(settings)
+#         self.__prev_left_ch = None
+#         self.__prev_right_ch = None
+#
+#     def reset(self):
+#         self.__prev_left_ch = None
+#         self.__prev_right_ch = None
+#
+#     def get_new_analyser(self, callback):
+#         return AudioAnalyser(self._PULSE_AUDIO_DEVICE, callback,
+#                              mode=AudioAnalyser.Mode.SPECTRUM,
+#                              interval=self._STD_INTERVAL,
+#                              multichannel=self._STD_MULTI_CH,
+#                              threshold=self._EFFECT_MIN_AMP,
+#                              cutoff=self._EFFECT_MAX_AMP)
+#
+#     def get_effect(self, data):
+#         leds_per_channel = (self._settings[Setting.LED_COUNT_TOP] // 2 +
+#                             self._settings[Setting.LED_COUNT_BOTTOM] // 2 +
+#                             self._settings[Setting.LED_COUNT_SIDE])
+#
+#         # Divide into two channels and create effects.
+#         left_ch = self._normalize_data(
+#             data[0][:leds_per_channel], self._EFFECT_MIN_AMP,
+#             self._EFFECT_MAX_AMP)
+#
+#         if self.__prev_left_ch is not None:
+#             left_ch = self._apply_linear_decay_effect(
+#                 left_ch, self.__prev_left_ch,
+#                 self._EFFECT_DECAY / self._settings[
+#                     Setting.AUDIO_FRAME_RATE])
+#         self.__prev_left_ch = left_ch
+#
+#         left_ch_eff = self._create_basic_color_effect(
+#             left_ch, [0, 0, 255])
+#
+#         # Second channel if needed.
+#         if len(data) > 1:
+#             right_ch = self._normalize_data(
+#                 data[1][:leds_per_channel], self._EFFECT_MIN_AMP,
+#                 self._EFFECT_MAX_AMP)
+#
+#             if self.__prev_right_ch is not None:
+#                 right_ch = self._apply_linear_decay_effect(
+#                     right_ch, self.__prev_right_ch,
+#                     self._EFFECT_DECAY / self._settings[
+#                         Setting.AUDIO_FRAME_RATE])
+#             self.__prev_right_ch = right_ch
+#
+#             right_ch_eff = self._create_basic_color_effect(
+#                 right_ch, [0, 0, 255])
+#         else:
+#             right_ch_eff = left_ch_eff
+#
+#         # Join channels correctly.
+#         return self._join_channel_effects(left_ch_eff, right_ch_eff)
 
 
 class LevelEffect(BaseAudioEffect):
     _EFFECT_MIN_AMP = -30
     _EFFECT_MAX_AMP = 0
-    _EFFECT_FALLOFF = 20
+    _EFFECT_FALLOFF = 40
     _EFFECT_DECAY_DELAY = 30
 
     def get_new_analyser(self, callback):
-        return AudioAnalyser(self._PULSE_AUDIO_DEVICE, callback,
-                             mode=AudioAnalyser.Mode.LEVEL,
-                             interval=self._STD_INTERVAL,
-                             multichannel=self._STD_MULTI_CH,
-                             threshold=self._EFFECT_MIN_AMP,
-                             cutoff=self._EFFECT_MAX_AMP,
-                             peak_ttl=self._EFFECT_DECAY_DELAY,
-                             peak_falloff=self._EFFECT_FALLOFF)
+        return LevelAudioAnalyser(self._PULSE_AUDIO_DEVICE, callback,
+                                  interval=self._STD_INTERVAL,
+                                  multichannel=self._STD_MULTI_CH,
+                                  peak_ttl=self._EFFECT_DECAY_DELAY,
+                                  peak_falloff=self._EFFECT_FALLOFF)
 
     def get_effect(self, data):
         leds_per_channel = (self._settings[Setting.LED_COUNT_TOP] // 2 +
@@ -178,22 +175,28 @@ class LevelEffect(BaseAudioEffect):
                             self._settings[Setting.LED_COUNT_SIDE])
 
         # Divide into two channels and create effects.
-        rms = self._normalize_data(data['rms'], self._EFFECT_MIN_AMP,
-                                   self._EFFECT_MAX_AMP)
-        peak = self._normalize_data(data['peak'], self._EFFECT_MIN_AMP,
-                                    self._EFFECT_MAX_AMP)
-        decay = self._normalize_data(data['decay'], self._EFFECT_MIN_AMP,
-                                     self._EFFECT_MAX_AMP)
+        # rms = self._normalize_data(data['rms'], self._EFFECT_MIN_AMP,
+        #                            self._EFFECT_MAX_AMP)
+        # peak = self._normalize_data(data['peak'], self._EFFECT_MIN_AMP,
+        #                             self._EFFECT_MAX_AMP)
+        decay_low = self._normalize_data(data['low']['decay'],
+                                         self._EFFECT_MIN_AMP,
+                                         self._EFFECT_MAX_AMP)
+        decay_high = self._normalize_data(data['high']['decay'],
+                                          self._EFFECT_MIN_AMP,
+                                          self._EFFECT_MAX_AMP)
 
-        left_ch_eff = self._create_level_color_effect(peak[0],
-                                                      leds_per_channel,
-                                                      [0, 0, 255])
+        # left_ch_eff = self._create_pulse_level_color_effect(
+        #     decay[0], 0.15, leds_per_channel, [0, 255, 0])
+        left_ch_eff = self._create_slider_level_color_effect(
+            decay_low[0], leds_per_channel, [0, 255, 0])
 
         # Second channel if needed.
-        if len(peak) > 1:
-            right_ch_eff = self._create_level_color_effect(peak[1],
-                                                           leds_per_channel,
-                                                           [0, 0, 255])
+        if len(decay_low) > 1 and len(decay_high) > 1:
+            # right_ch_eff = self._create_pulse_level_color_effect(
+            #     decay[1], 0.15, leds_per_channel, [0, 255, 0])
+            right_ch_eff = self._create_slider_level_color_effect(
+                decay_low[0], leds_per_channel, [0, 255, 0])
         else:
             right_ch_eff = left_ch_eff
 
@@ -201,6 +204,22 @@ class LevelEffect(BaseAudioEffect):
         return self._join_channel_effects(left_ch_eff, right_ch_eff)
 
     @staticmethod
-    def _create_level_color_effect(norm_level, channel_width, color):
+    def _create_slider_level_color_effect(norm_level, channel_width, color):
         level = norm_level * channel_width
         return [color if i < level else [0, 0, 0] for i in range(channel_width)]
+
+    @staticmethod
+    def _create_scaled_slider_level_color_effect(norm_level, channel_width,
+                                                 low_color, mid_color,
+                                                 high_color):
+        level = norm_level * channel_width
+        return [(low_color if i < channel_width * 0.66 else
+                 (mid_color if i < channel_width * 0.90 else high_color))
+                if i < level else [0, 0, 0]
+                for i in range(channel_width)]
+
+    @staticmethod
+    def _create_pulse_level_color_effect(norm_level, min_norm_level,
+                                         channel_width, color):
+        return [[int(round(c * max(norm_level, min_norm_level))) for c in color]
+                for _ in range(channel_width)]

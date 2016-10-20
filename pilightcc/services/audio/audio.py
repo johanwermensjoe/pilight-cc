@@ -6,10 +6,8 @@ from pilightcc.services.service import ServiceLauncher
 from threading import Lock, Event
 
 # Application
-from pilightcc.services.audio.audioanalyzer import AudioAnalyser, \
-    AudioAnalyserError
-from pilightcc.services.audio.audioeffect import LevelEffect, \
-    SpectrumEffect
+from pilightcc.services.audio.audioanalyzer import AudioAnalyserError
+from pilightcc.services.audio.audioeffect import LevelEffect
 from pilightcc.hyperion.hypjson import HyperionJson
 from pilightcc.hyperion.hypproto import HyperionError
 from pilightcc.settings.settings import Setting, LedCorner, LedDir
@@ -125,4 +123,4 @@ class AudioService(BaseService):
 
 
 if __name__ == '__main__':
-    ServiceLauncher.parse_args_and_execute("AudioEffect", AudioService)
+    ServiceLauncher.parse_args_and_execute("Audio", AudioService)
