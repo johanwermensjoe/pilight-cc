@@ -160,7 +160,7 @@ class LevelEffect(BaseAudioEffect):
     _EFFECT_MIN_AMP = -30
     _EFFECT_MAX_AMP = 0
     _EFFECT_FALLOFF = 40
-    _EFFECT_DECAY_DELAY = 30
+    _EFFECT_DECAY_DELAY = 20
 
     def get_new_analyser(self, callback):
         return LevelAudioAnalyser(self._PULSE_AUDIO_DEVICE, callback,
@@ -182,26 +182,51 @@ class LevelEffect(BaseAudioEffect):
         decay_low = self._normalize_data(data['low']['decay'],
                                          self._EFFECT_MIN_AMP,
                                          self._EFFECT_MAX_AMP)
+        decay_mid = self._normalize_data(data['mid']['decay'],
+                                         self._EFFECT_MIN_AMP,
+                                         self._EFFECT_MAX_AMP)
         decay_high = self._normalize_data(data['high']['decay'],
                                           self._EFFECT_MIN_AMP,
                                           self._EFFECT_MAX_AMP)
 
         # left_ch_eff = self._create_pulse_level_color_effect(
         #     decay[0], 0.15, leds_per_channel, [0, 255, 0])
-        left_ch_eff = self._create_slider_level_color_effect(
-            decay_low[0], leds_per_channel, [0, 255, 0])
+        # left_ch_eff = self._create_slider_level_color_effect(
+        #     decay_low[0], leds_per_channel, [0, 255, 0])
 
-        # Second channel if needed.
-        if len(decay_low) > 1 and len(decay_high) > 1:
-            # right_ch_eff = self._create_pulse_level_color_effect(
-            #     decay[1], 0.15, leds_per_channel, [0, 255, 0])
-            right_ch_eff = self._create_slider_level_color_effect(
-                decay_low[0], leds_per_channel, [0, 255, 0])
-        else:
-            right_ch_eff = left_ch_eff
+        left_ch_eff = self._create_comb_level_color_effect(
+            decay_low[0], decay_mid[0], decay_high[0], 0.15, leds_per_channel,
+            [0, 255, 0])
+        right_ch_eff = self._create_comb_level_color_effect(
+            decay_low[1], decay_mid[0], decay_high[1], 0.15, leds_per_channel,
+            [0, 255, 0])
+
+        # # Second channel if needed.
+        # if len(decay_low) > 1 and len(decay_high) > 1:
+        #     # right_ch_eff = self._create_pulse_level_color_effect(
+        #     #     decay[1], 0.15, leds_per_channel, [0, 255, 0])
+        #     right_ch_eff = self._create_slider_level_color_effect(
+        #         decay_low[0], leds_per_channel, [0, 255, 0])
+        # else:
+        #     right_ch_eff = left_ch_eff
 
         # Join channels correctly.
         return self._join_channel_effects(left_ch_eff, right_ch_eff)
+
+    def _create_comb_level_color_effect(self, low_norm_level, mid_norm_level,
+                                        high_norm_level, min_norm_level,
+                                        channel_width, color):
+        low_led_count = self._settings[Setting.LED_COUNT_BOTTOM] // 2 + \
+                        int(round(self._settings[Setting.LED_COUNT_SIDE] * 0.3))
+        mid_led_count = int(round(self._settings[Setting.LED_COUNT_SIDE] * 0.7))
+        return \
+            LevelEffect._create_pulse_level_color_effect(
+                low_norm_level, min_norm_level, low_led_count, color) + \
+            LevelEffect._create_pulse_level_color_effect(
+                mid_norm_level, min_norm_level, mid_led_count, color) + \
+            LevelEffect._create_pulse_level_color_effect(
+               high_norm_level, min_norm_level,
+               channel_width - low_led_count - mid_led_count, color)
 
     @staticmethod
     def _create_slider_level_color_effect(norm_level, channel_width, color):
