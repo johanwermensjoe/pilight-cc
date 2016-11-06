@@ -196,10 +196,10 @@ class LevelEffect(BaseAudioEffect):
 
         left_ch_eff = self._create_comb_level_color_effect(
             decay_low[0], decay_mid[0], decay_high[0], 0.15, leds_per_channel,
-            [0, 255, 0])
+            [0, 0, 255])
         right_ch_eff = self._create_comb_level_color_effect(
             decay_low[1], decay_mid[0], decay_high[1], 0.15, leds_per_channel,
-            [0, 255, 0])
+            [0, 0, 255])
 
         # # Second channel if needed.
         # if len(decay_low) > 1 and len(decay_high) > 1:
